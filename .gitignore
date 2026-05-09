@@ -1,0 +1,28 @@
+# Original PopART C++ source - reference only, not part of the port
+original/
+docs/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment and local config
+.env
+.env.local
+
+# OS clutter
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.vscode/
+.idea/
+
+# Test coverage reports
+coverage/
+
+# Logs
+*.log
