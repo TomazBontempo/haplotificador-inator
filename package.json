@@ -1,9 +1,10 @@
 {
+  "type": "module",
   "devDependencies": {
     "jest": "^30.4.2"
   },
   "scripts": {
-    "test": "jest --passWithNoTests"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --passWithNoTests"
   },
   "jest": {
     "testEnvironment": "node"
