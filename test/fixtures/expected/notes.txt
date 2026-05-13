@@ -1,0 +1,4 @@
+The expected files for MSN and MJN networs were made with Epsilon 0.
+The IntNJ networks were made with 0.5 reticulation tolerance.
+In the complex files, more than 5% sites contain undefined states and were masked by popart.
+in the complex files, some sequences contain significantly more undefined states than others. Popart asks if we want to remove them. We never remove, because if we do, Popart gives us an error in all the networks.
