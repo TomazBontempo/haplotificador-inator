@@ -143,9 +143,9 @@ export
   - [x] Implement the MJN algorithm in MJN.js building on MSN.
   - [x] Add parity tests validating output against PopART's results.
 
-- [ ] 06 - TCS
-  - [ ] Implement the TCS algorithm in TCS.js.
-  - [ ] Add parity tests validating output against PopART's results.
+- [x] 06 - TCS
+  - [x] Implement the TCS algorithm in TCS.js.
+  - [x] Add parity tests validating output against PopART's results.
 
 - [ ] 07 - IntNJ
   - [ ] Research and select a JavaScript linear programming solver.
