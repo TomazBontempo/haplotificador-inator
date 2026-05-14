@@ -4,6 +4,9 @@ import Vertex from "./Vertex.js";
 const INFINITY = Number.POSITIVE_INFINITY;
 
 export class Graph {
+  /**
+   * Creates an undirected logical graph with cached shortest-path storage.
+   */
   constructor() {
     this.vertices = [];
     this.edges = [];
@@ -12,6 +15,9 @@ export class Graph {
     this.floydWarshallUpdated = false;
   }
 
+  /**
+   * Creates and stores a new vertex with the next graph index.
+   */
   newVertex(label = "", info = null) {
     const vertex = new Vertex(label, this.vertices.length, info);
     this.vertices.push(vertex);
@@ -19,10 +25,16 @@ export class Graph {
     return vertex;
   }
 
+  /**
+   * Alias for newVertex to match the public graph API.
+   */
   addVertex(label = "", info = null) {
     return this.newVertex(label, info);
   }
 
+  /**
+   * Creates and stores an undirected weighted edge between two graph vertices.
+   */
   newEdge(from, to, weight = 1, info = null) {
     this.assertVertexBelongsToGraph(from);
     this.assertVertexBelongsToGraph(to);
@@ -35,10 +47,16 @@ export class Graph {
     return edge;
   }
 
+  /**
+   * Alias for newEdge to match the public graph API.
+   */
   addEdge(from, to, weight = 1, info = null) {
     return this.newEdge(from, to, weight, info);
   }
 
+  /**
+   * Returns a vertex by index or throws when the index is invalid.
+   */
   vertex(index) {
     const vertex = this.vertices[index];
     if (!vertex) {
@@ -47,6 +65,9 @@ export class Graph {
     return vertex;
   }
 
+  /**
+   * Returns an edge by index or throws when the index is invalid.
+   */
   edge(index) {
     const edge = this.edges[index];
     if (!edge) {
@@ -55,14 +76,23 @@ export class Graph {
     return edge;
   }
 
+  /**
+   * Returns the number of vertices in the graph.
+   */
   vertexCount() {
     return this.vertices.length;
   }
 
+  /**
+   * Returns the number of edges in the graph.
+   */
   edgeCount() {
     return this.edges.length;
   }
 
+  /**
+   * Returns the endpoint opposite a vertex on an incident edge.
+   */
   opposite(vertex, edge) {
     if (edge.from === vertex) {
       return edge.to;
@@ -73,6 +103,9 @@ export class Graph {
     throw new Error("Vertex is not adjacent to edge.");
   }
 
+  /**
+   * Reassigns an existing edge to different endpoints.
+   */
   moveEdge(index, from, to) {
     const edge = this.edge(index);
     this.assertVertexBelongsToGraph(from);
@@ -87,6 +120,9 @@ export class Graph {
     this.floydWarshallUpdated = false;
   }
 
+  /**
+   * Removes an edge and refreshes remaining edge indices.
+   */
   removeEdge(index) {
     const edge = this.edge(index);
     edge.from.removeIncidentEdge(edge);
@@ -96,6 +132,9 @@ export class Graph {
     this.floydWarshallUpdated = false;
   }
 
+  /**
+   * Removes a vertex and all incident edges from the graph.
+   */
   removeVertex(index) {
     const vertex = this.vertex(index);
     while (vertex.degree > 0) {
@@ -106,18 +145,27 @@ export class Graph {
     this.floydWarshallUpdated = false;
   }
 
+  /**
+   * Clears traversal marks from all edges.
+   */
   unmarkEdges() {
     for (const edge of this.edges) {
       edge.unmark();
     }
   }
 
+  /**
+   * Clears traversal marks from all vertices.
+   */
   unmarkVertices() {
     for (const vertex of this.vertices) {
       vertex.unmark();
     }
   }
 
+  /**
+   * Tests whether two vertices are connected by any path.
+   */
   areConnected(start, end) {
     this.assertVertexBelongsToGraph(start);
     this.assertVertexBelongsToGraph(end);
@@ -150,6 +198,9 @@ export class Graph {
     return false;
   }
 
+  /**
+   * Returns the shortest weighted path length between two vertices.
+   */
   pathLength(from, to) {
     this.assertVertexBelongsToGraph(from);
     this.assertVertexBelongsToGraph(to);
@@ -161,6 +212,9 @@ export class Graph {
     return this.pathLengths[from.index * this.vertexCount() + to.index];
   }
 
+  /**
+   * Reconstructs one shortest path between two vertices.
+   */
   path(from, to) {
     this.assertVertexBelongsToGraph(from);
     this.assertVertexBelongsToGraph(to);
@@ -174,6 +228,9 @@ export class Graph {
     return [from, ...intermediates.map((index) => this.vertex(index)), to];
   }
 
+  /**
+   * Serializes the graph topology without renderer state.
+   */
   toJSON() {
     return {
       vertices: this.vertices.map((vertex) => vertex.toJSON()),
@@ -181,24 +238,36 @@ export class Graph {
     };
   }
 
+  /**
+   * Ensures a vertex reference is owned by this graph instance.
+   */
   assertVertexBelongsToGraph(vertex) {
     if (!vertex || this.vertices[vertex.index] !== vertex) {
       throw new Error("Vertex does not belong to this graph.");
     }
   }
 
+  /**
+   * Refreshes edge indices after deletion.
+   */
   reindexEdges() {
     this.edges.forEach((edge, index) => {
       edge.index = index;
     });
   }
 
+  /**
+   * Refreshes vertex indices after deletion.
+   */
   reindexVertices() {
     this.vertices.forEach((vertex, index) => {
       vertex.index = index;
     });
   }
 
+  /**
+   * Rebuilds all-pairs shortest-path caches for the logical graph.
+   */
   updateFloydWarshall() {
     const count = this.vertexCount();
     this.pathLengths = Array(count * count).fill(INFINITY);
@@ -208,6 +277,8 @@ export class Graph {
       this.pathLengths[i * count + i] = 0;
     }
 
+    // Store path lengths in a flat array so graph data is simple to serialize
+    // across Web Workers. See Architecture divergences in AGENTS.md.
     for (const edge of this.edges) {
       const from = edge.from.index;
       const to = edge.to.index;
@@ -236,6 +307,9 @@ export class Graph {
     this.floydWarshallUpdated = true;
   }
 
+  /**
+   * Recursively appends cached intermediate vertices for a shortest path.
+   */
   reconstructPath(fromIndex, toIndex, output) {
     const count = this.vertexCount();
     const next = this.nextPath[fromIndex * count + toIndex];

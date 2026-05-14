@@ -4,10 +4,16 @@ const DNA_AMBIGUOUS = new Set(["-", "?", "N", "Y", "R", "M", "S", "V", "W", "K",
 const BINARY_AMBIGUOUS = new Set(["-", "?"]);
 const AA_AMBIGUOUS = new Set(["-", "X", "?"]);
 
+/**
+ * Wraps model failures with a consistent HapNet-specific prefix.
+ */
 function modelError(message) {
   return new Error(`HapNet model error: ${message}`);
 }
 
+/**
+ * Normalizes Nexus datatype aliases into the internal HapNet categories.
+ */
 function normalizeDatatype(datatype) {
   const value = String(datatype || "dna").toLowerCase();
   if (value === "standard" || value === "binary") {
@@ -19,6 +25,9 @@ function normalizeDatatype(datatype) {
   return "dna";
 }
 
+/**
+ * Reports whether a character is ambiguous for the active sequence datatype.
+ */
 function isAmbiguousChar(char, datatype) {
   const value = String(char).toUpperCase();
   if (datatype === "binary") {
@@ -30,6 +39,9 @@ function isAmbiguousChar(char, datatype) {
   return DNA_AMBIGUOUS.has(value);
 }
 
+/**
+ * Checks PopART-compatible DNA ambiguity pairs that do not add distance.
+ */
 function isCompatibleDnaAmbiguity(left, right) {
   return (
     (left === "R" && (right === "A" || right === "G")) ||
@@ -39,6 +51,9 @@ function isCompatibleDnaAmbiguity(left, right) {
   );
 }
 
+/**
+ * Extracts ordered taxon sequences from parsed Nexus character data.
+ */
 function sequencesFromParsed(parsed) {
   if (!parsed?.characters?.matrix) {
     throw modelError("Expected parsed Nexus data with a characters matrix.");
@@ -59,6 +74,9 @@ function sequencesFromParsed(parsed) {
 }
 
 export class HapNet extends Graph {
+  /**
+   * Builds a read-only haplotype model from parsed Nexus data.
+   */
   constructor(parsed, options = {}) {
     super();
 
@@ -80,6 +98,8 @@ export class HapNet extends Graph {
     this.traitNames = parsed?.traits?.labels ? [...parsed.traits.labels] : [];
     this.traitsByHaplotype = [];
 
+    // Algorithms return independent Graph objects and must not mutate HapNet.
+    // See Architecture divergences in AGENTS.md.
     this.validateSequences();
     this.applyMask();
     this.condenseSeqs();
@@ -88,18 +108,30 @@ export class HapNet extends Graph {
     this.associateTraits(parsed?.traits ?? null);
   }
 
+  /**
+   * Convenience factory for constructing HapNet instances from parsed Nexus data.
+   */
   static fromParsed(parsed, options = {}) {
     return new HapNet(parsed, options);
   }
 
+  /**
+   * Returns the number of condensed haplotypes.
+   */
   get nseqs() {
     return this.haplotypes.length;
   }
 
+  /**
+   * Returns the number of condensed informative site patterns.
+   */
   get nsites() {
     return this.siteWeights.length;
   }
 
+  /**
+   * Returns a haplotype or original sequence name by index.
+   */
   seqName(index, original = false) {
     if (original) {
       return this.originalSequences[index]?.name ?? null;
@@ -107,6 +139,9 @@ export class HapNet extends Graph {
     return this.haplotypes[index]?.name ?? null;
   }
 
+  /**
+   * Returns a haplotype or original sequence string by index.
+   */
   seqSeq(index, original = false) {
     if (original) {
       return this.originalSequences[index]?.sequence ?? null;
@@ -114,20 +149,32 @@ export class HapNet extends Graph {
     return this.haplotypes[index]?.sequence ?? null;
   }
 
+  /**
+   * Returns the frequency associated with a condensed haplotype.
+   */
   freq(index) {
     return this.frequencies[index] ?? 0;
   }
 
+  /**
+   * Returns a defensive copy of trait counts for a haplotype.
+   */
   traits(index) {
     return this.traitsByHaplotype[index] ? [...this.traitsByHaplotype[index]] : [];
   }
 
+  /**
+   * Lists original taxa represented by a condensed haplotype.
+   */
   identicalTaxa(index) {
     return (this.condensedToOriginal[index] ?? []).map((originalIndex) => (
       this.originalSequences[originalIndex].name
     ));
   }
 
+  /**
+   * Returns the original-site weight for a condensed site pattern.
+   */
   weight(index) {
     if (index < 0 || index >= this.siteWeights.length) {
       throw modelError("Invalid site index given for weight.");
@@ -135,6 +182,9 @@ export class HapNet extends Graph {
     return this.siteWeights[index];
   }
 
+  /**
+   * Returns the precomputed weighted distance between two haplotypes.
+   */
   distance(from, to) {
     if (from < 0 || from >= this.nseqs || to < 0 || to >= this.nseqs) {
       throw modelError("Invalid haplotype index for distance.");
@@ -142,6 +192,9 @@ export class HapNet extends Graph {
     return this.distances[from * this.nseqs + to];
   }
 
+  /**
+   * Serializes HapNet state for storage or worker transfer.
+   */
   toJSON() {
     return {
       datatype: this.datatype,
@@ -164,6 +217,9 @@ export class HapNet extends Graph {
     };
   }
 
+  /**
+   * Ensures all original sequences share the same alignment length.
+   */
   validateSequences() {
     for (const { name, sequence } of this.originalSequences) {
       if (sequence.length !== this.originalSiteCount) {
@@ -172,6 +228,9 @@ export class HapNet extends Graph {
     }
   }
 
+  /**
+   * Applies an optional precomputed site mask before condensation.
+   */
   applyMask() {
     if (!this.mask) {
       return;
@@ -188,6 +247,9 @@ export class HapNet extends Graph {
     this.originalSiteCount = this.originalSequences[0]?.sequence.length ?? 0;
   }
 
+  /**
+   * Condenses identical sequences into haplotypes and records original mapping.
+   */
   condenseSeqs() {
     const sequenceToIndex = new Map();
 
@@ -217,6 +279,9 @@ export class HapNet extends Graph {
     this.frequencies = this.haplotypes.map((haplotype) => haplotype.frequency);
   }
 
+  /**
+   * Condenses equivalent site patterns and records their original-site weights.
+   */
   condenseSitePats() {
     const nsites = this.originalSiteCount;
     const samePosAs = Array.from({ length: nsites }, (_, index) => index);
@@ -227,6 +292,8 @@ export class HapNet extends Graph {
         isAmbiguousChar(sequence[i], this.datatype)
       ));
 
+      // All-ambiguous columns cannot distinguish haplotypes, so PopART excludes
+      // them from the condensed alignment rather than assigning a graph weight.
       if (allAmbiguous) {
         samePosAs[i] = nsites;
       }
@@ -273,6 +340,9 @@ export class HapNet extends Graph {
     });
   }
 
+  /**
+   * Checks whether two original columns encode the same haplotype partition.
+   */
   sameSitePattern(sequences, leftIndex, rightIndex) {
     const leftToRight = new Map();
     const rightToLeft = new Map();
@@ -300,6 +370,9 @@ export class HapNet extends Graph {
     return true;
   }
 
+  /**
+   * Precomputes the symmetric weighted distance matrix between haplotypes.
+   */
   computeDistances() {
     const count = this.nseqs;
     this.distances = Array(count * count).fill(0);
@@ -313,6 +386,9 @@ export class HapNet extends Graph {
     }
   }
 
+  /**
+   * Computes weighted distance between two condensed haplotype sequences.
+   */
   pairwiseDistance(leftSequence, rightSequence) {
     if (leftSequence.length !== rightSequence.length) {
       throw modelError("Sequences are not the same length.");
@@ -327,6 +403,8 @@ export class HapNet extends Graph {
         continue;
       }
       if (isAmbiguousChar(left, this.datatype) || isAmbiguousChar(right, this.datatype)) {
+        // Ambiguous states are treated as unknown, matching PopART distance
+        // behavior rather than forcing a mismatch penalty.
         if (this.datatype === "dna" && isCompatibleDnaAmbiguity(left, right)) {
           continue;
         }
@@ -339,6 +417,9 @@ export class HapNet extends Graph {
     return distance;
   }
 
+  /**
+   * Aggregates original taxon trait counts onto condensed haplotypes.
+   */
   associateTraits(traits) {
     const traitMatrix = traits?.matrix;
     if (!traitMatrix) {

@@ -18,6 +18,9 @@ const BLOCK_KEYS = {
   network: "network",
 };
 
+/**
+ * Creates the top-level parse result with optional Nexus blocks unset.
+ */
 function createResult() {
   return {
     taxa: null,
@@ -29,6 +32,9 @@ function createResult() {
   };
 }
 
+/**
+ * Creates the parsed representation for CHARACTERS or DATA blocks.
+ */
 function createCharacters() {
   return {
     nchar: 0,
@@ -39,6 +45,9 @@ function createCharacters() {
   };
 }
 
+/**
+ * Creates the parsed representation for a TRAITS block.
+ */
 function createTraits() {
   return {
     ntraits: 0,
@@ -49,6 +58,9 @@ function createTraits() {
   };
 }
 
+/**
+ * Creates the parsed representation for a GEOTAGS block.
+ */
 function createGeoTags() {
   return {
     nclusts: 0,
@@ -59,6 +71,9 @@ function createGeoTags() {
   };
 }
 
+/**
+ * Creates the parsed representation for a NETWORK block.
+ */
 function createNetwork() {
   return {
     vertices: [],
@@ -67,10 +82,16 @@ function createNetwork() {
   };
 }
 
+/**
+ * Wraps parser failures with a consistent Nexus-specific prefix.
+ */
 function parseError(message) {
   return new Error(`Nexus parse error: ${message}`);
 }
 
+/**
+ * Removes Nexus bracket comments while preserving quoted values and line breaks.
+ */
 function removeComments(text) {
   let output = "";
   let inComment = false;
@@ -113,6 +134,9 @@ function removeComments(text) {
   return output;
 }
 
+/**
+ * Splits Nexus input into semicolon-terminated statements outside quotes.
+ */
 function splitStatements(text) {
   const statements = [];
   let current = "";
@@ -154,10 +178,16 @@ function splitStatements(text) {
   return statements;
 }
 
+/**
+ * Normalizes assignment spacing so token parsing can treat key=value as one token.
+ */
 function normalizeEquals(value) {
   return value.replace(/\s*=\s*/g, "=");
 }
 
+/**
+ * Tokenizes a Nexus value while preserving quoted labels as single tokens.
+ */
 function tokenize(value, separators = /\s+/) {
   const tokens = [];
   const splitOnComma = separators === ",";
@@ -201,6 +231,9 @@ function tokenize(value, separators = /\s+/) {
   return tokens;
 }
 
+/**
+ * Returns the first command token and the remaining statement body.
+ */
 function firstToken(statement) {
   const match = statement.match(/^\s*("[^"]+"|'[^']+'|\S+)/);
   if (!match) {
@@ -214,10 +247,16 @@ function firstToken(statement) {
   };
 }
 
+/**
+ * Removes punctuation Nexus commonly leaves on labels at statement boundaries.
+ */
 function stripTrailingPunctuation(value) {
   return value.replace(/[;,]$/g, "");
 }
 
+/**
+ * Removes surrounding single or double quotes from a Nexus token.
+ */
 function stripQuotes(value) {
   const clean = stripTrailingPunctuation(value.trim());
   if (
@@ -229,6 +268,9 @@ function stripQuotes(value) {
   return clean;
 }
 
+/**
+ * Parses FORMAT and DIMENSIONS style assignments into a case-insensitive map.
+ */
 function parseAssignments(statement) {
   const normalized = normalizeEquals(statement);
   const tokens = tokenize(normalized);
@@ -249,10 +291,16 @@ function parseAssignments(statement) {
   return assignments;
 }
 
+/**
+ * Parses a whitespace-delimited list of numeric Nexus values.
+ */
 function parseNumberList(rest) {
   return tokenize(rest).map((token) => Number(token));
 }
 
+/**
+ * Ensures the result has a TAXA array and returns it.
+ */
 function ensureTaxa(result) {
   if (!result.taxa) {
     result.taxa = [];
@@ -260,6 +308,9 @@ function ensureTaxa(result) {
   return result.taxa;
 }
 
+/**
+ * Adds a taxon name once, preserving the first observed order.
+ */
 function addTaxon(result, name) {
   const taxa = ensureTaxa(result);
   if (!taxa.includes(name)) {
@@ -267,6 +318,9 @@ function addTaxon(result, name) {
   }
 }
 
+/**
+ * Parses TAXLABELS entries into the result taxon list.
+ */
 function parseTaxLabels(statement, result) {
   const { rest } = firstToken(statement);
   for (const name of tokenize(rest)) {
@@ -274,6 +328,9 @@ function parseTaxLabels(statement, result) {
   }
 }
 
+/**
+ * Applies block-specific DIMENSIONS metadata to the parse result.
+ */
 function applyDimensions(block, statement, result) {
   const { rest } = firstToken(statement);
   const assignments = parseAssignments(rest);
@@ -295,6 +352,9 @@ function applyDimensions(block, statement, result) {
   }
 }
 
+/**
+ * Applies block-specific FORMAT settings and parser state flags.
+ */
 function applyFormat(block, statement, result, state) {
   const { rest } = firstToken(statement);
   const assignments = parseAssignments(rest);
@@ -339,6 +399,9 @@ function applyFormat(block, statement, result, state) {
   }
 }
 
+/**
+ * Converts Nexus separator keywords into literal separator characters.
+ */
 function parseSeparator(value) {
   const normalized = String(value).toLowerCase();
   if (normalized === "comma") {
@@ -350,6 +413,9 @@ function parseSeparator(value) {
   return " ";
 }
 
+/**
+ * Parses CHARACTERS/DATA matrix rows and resolves match characters.
+ */
 function parseCharactersMatrix(statement, result, state) {
   const { rest } = firstToken(statement);
   const rows = rest.split(/\r?\n/).map((row) => row.trim()).filter(Boolean);
@@ -396,12 +462,18 @@ function parseCharactersMatrix(statement, result, state) {
   }
 }
 
+/**
+ * Expands Nexus match characters against the first matrix sequence.
+ */
 function replaceMatchChars(sequence, topSequence, matchChar) {
   return Array.from(sequence, (char, index) => (
     char === matchChar ? topSequence[index] ?? char : char
   )).join("");
 }
 
+/**
+ * Splits a matrix row into a taxon label and the remaining values.
+ */
 function parseLabeledRow(row) {
   const trimmed = row.replace(/,$/, "").trim();
   if (!trimmed) {
@@ -427,6 +499,9 @@ function parseLabeledRow(row) {
   };
 }
 
+/**
+ * Parses TRAITLABELS and derives ntraits when it was not declared.
+ */
 function parseTraitLabels(statement, result) {
   const { rest } = firstToken(statement);
   result.traits.labels = tokenize(rest);
@@ -435,11 +510,17 @@ function parseTraitLabels(statement, result) {
   }
 }
 
+/**
+ * Parses trait latitude or longitude coordinate lists.
+ */
 function parseTraitCoordinates(statement, result, target) {
   const { rest } = firstToken(statement);
   result.traits[target] = parseNumberList(rest);
 }
 
+/**
+ * Parses trait counts, optionally using TAXA order when labels are omitted.
+ */
 function parseTraitsMatrix(statement, result, state) {
   const { rest } = firstToken(statement);
   const rows = rest.split(/\r?\n/).map((row) => row.trim()).filter(Boolean);
@@ -475,6 +556,9 @@ function parseTraitsMatrix(statement, result, state) {
   }
 }
 
+/**
+ * Splits TRAITS or GEOTAGS matrix values using the active block separator.
+ */
 function splitMatrixValues(value, separator) {
   if (separator === ",") {
     return value.split(",").map((part) => part.trim()).filter(Boolean);
@@ -485,16 +569,25 @@ function splitMatrixValues(value, separator) {
   return tokenize(value);
 }
 
+/**
+ * Parses GEOTAGS cluster labels.
+ */
 function parseClustLabels(statement, result) {
   const { rest } = firstToken(statement);
   result.geotags.clustLabels = tokenize(rest);
 }
 
+/**
+ * Parses GEOTAGS cluster latitude or longitude coordinate lists.
+ */
 function parseClustCoordinates(statement, result, target) {
   const { rest } = firstToken(statement);
   result.geotags[target] = parseNumberList(rest);
 }
 
+/**
+ * Parses GEOTAGS rows into named coordinates and optional sample counts.
+ */
 function parseGeoTagsMatrix(statement, result, state) {
   const { rest } = firstToken(statement);
   const rows = rest.split(/\r?\n/).map((row) => row.trim()).filter(Boolean);
@@ -539,6 +632,9 @@ function parseGeoTagsMatrix(statement, result, state) {
   }
 }
 
+/**
+ * Parses decimal coordinates with optional N/S/E/W hemisphere suffixes.
+ */
 function parseCoordinate(value, kind) {
   const normalized = String(value).trim();
   const match = normalized.match(/^(-?\d+(?:\.\d+)?)([NSEWnsew])?$/);
@@ -554,6 +650,9 @@ function parseCoordinate(value, kind) {
   return coordinate;
 }
 
+/**
+ * Stores the Newick portion of a TREE statement.
+ */
 function parseTree(statement, result) {
   const eqIndex = statement.indexOf("=");
   if (eqIndex === -1) {
@@ -562,6 +661,9 @@ function parseTree(statement, result) {
   result.trees.push(statement.slice(eqIndex + 1).trim());
 }
 
+/**
+ * Parses comma-separated NETWORK row lists with a row-specific parser.
+ */
 function parseNetworkList(statement, parser) {
   const { rest } = firstToken(statement);
   return rest.split(/\r?\n/)
@@ -570,6 +672,9 @@ function parseNetworkList(statement, parser) {
     .map(parser);
 }
 
+/**
+ * Parses a NETWORK vertex descriptor.
+ */
 function parseVertex(row) {
   const [id, x, y] = tokenize(row).map(Number);
   if (![id, x, y].every(Number.isFinite)) {
@@ -578,6 +683,9 @@ function parseVertex(row) {
   return { id, x, y };
 }
 
+/**
+ * Parses a NETWORK edge descriptor.
+ */
 function parseEdge(row) {
   const [id, from, to, weight = 1] = tokenize(row).map(Number);
   if (![id, from, to, weight].every(Number.isFinite)) {
@@ -586,6 +694,9 @@ function parseEdge(row) {
   return { id, from, to, weight };
 }
 
+/**
+ * Dispatches one Nexus statement according to the active block.
+ */
 function processStatement(statement, result, state) {
   const normalized = normalizeEquals(statement);
   const { token } = firstToken(normalized);
@@ -687,6 +798,9 @@ function processStatement(statement, result, state) {
   }
 }
 
+/**
+ * Parses Nexus text into the browser model's block-oriented data structure.
+ */
 export function parseNexus(text) {
   if (typeof text !== "string") {
     throw parseError("Expected Nexus input as a plain text string.");

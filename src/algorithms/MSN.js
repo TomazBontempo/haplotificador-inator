@@ -1,10 +1,16 @@
 import Graph from "../model/Graph.js";
 
+/**
+ * Wraps MSN failures with a consistent algorithm-specific prefix.
+ */
 function algorithmError(message) {
   // Keep algorithm failures distinct from parser/model errors in test output.
   return new Error(`MSN algorithm error: ${message}`);
 }
 
+/**
+ * Validates the minimal HapNet API required by MSN.
+ */
 function assertHapNetLike(hapNet) {
   // The algorithm only reads the public HapNet API needed for MSN inference.
   if (!hapNet || typeof hapNet.nseqs !== "number") {
@@ -19,6 +25,9 @@ function assertHapNetLike(hapNet) {
   }
 }
 
+/**
+ * Builds the metadata payload copied onto an output graph vertex.
+ */
 function createVertexInfo(hapNet, index) {
   // Copy HapNet metadata so the returned Graph is independent of the input.
   return {
@@ -29,8 +38,12 @@ function createVertexInfo(hapNet, index) {
   };
 }
 
+/**
+ * Builds all haplotype pairs sorted by distance for MSN processing.
+ */
 function buildSortedPairs(hapNet) {
-  // PopART builds every pair before processing; this port sorts the array once.
+  // Uses a sorted array instead of a priority queue, as required by the JS port.
+  // See Architecture divergences in AGENTS.md.
   const pairs = [];
 
   // Match PopART's pair orientation: later haplotype first, earlier haplotype second.
@@ -53,6 +66,9 @@ function buildSortedPairs(hapNet) {
 }
 
 class UnionFind {
+  /**
+   * Creates one disjoint-set component for each haplotype.
+   */
   constructor(size) {
     // Each haplotype starts as its own connected component.
     this.parent = Array.from({ length: size }, (_, index) => index);
@@ -60,6 +76,9 @@ class UnionFind {
     this.componentCount = size;
   }
 
+  /**
+   * Returns the representative component for an index.
+   */
   find(index) {
     // Path compression keeps repeated component checks cheap.
     if (this.parent[index] !== index) {
@@ -68,11 +87,17 @@ class UnionFind {
     return this.parent[index];
   }
 
+  /**
+   * Reports whether two indices currently share a component.
+   */
   connected(left, right) {
     // Components are compared by representative root.
     return this.find(left) === this.find(right);
   }
 
+  /**
+   * Merges two components and reports whether a merge occurred.
+   */
   union(left, right) {
     // Union by rank merges two components without depending on vertex order.
     let leftRoot = this.find(left);
@@ -98,10 +123,14 @@ class UnionFind {
   }
 }
 
+/**
+ * Computes PopART-compatible Minimum Spanning Network output as a new Graph.
+ */
 export function computeMSN(hapNet) {
   assertHapNetLike(hapNet);
 
   // The result is a fresh Graph; the HapNet input is never modified.
+  // See Architecture divergences in AGENTS.md.
   const graph = new Graph();
   const vertices = [];
 
@@ -118,7 +147,8 @@ export function computeMSN(hapNet) {
   const pairs = buildSortedPairs(hapNet);
   const unionFind = new UnionFind(hapNet.nseqs);
 
-  // Process equal-distance pairs as a batch, mirroring PopART's AbstractMSN.
+  // Equal-distance pairs are batched before merging components. This reproduces
+  // PopART's MSN behavior, which can emit cycles where a standard MST would stop.
   for (let cursor = 0; cursor < pairs.length && unionFind.componentCount > 1;) {
     const threshold = pairs[cursor].weight;
     const connectablePairs = [];
