@@ -139,9 +139,9 @@ export
   - [x] Implement the MSN algorithm in MSN.js.
   - [x] Add parity tests validating output against PopART's results.
 
-- [ ] 05 - MJN
-  - [ ] Implement the MJN algorithm in MJN.js building on MSN.
-  - [ ] Add parity tests validating output against PopART's results.
+- [x] 05 - MJN
+  - [x] Implement the MJN algorithm in MJN.js building on MSN.
+  - [x] Add parity tests validating output against PopART's results.
 
 - [ ] 06 - TCS
   - [ ] Implement the TCS algorithm in TCS.js.
