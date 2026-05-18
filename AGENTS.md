@@ -25,6 +25,9 @@ This project is part of a TCC (Trabalho de Conclusão de Curso) — see `docs/` 
   with real examples. Consult before implementing the parser.
 - Always prefer these local docs over assumed knowledge.
 - For Web APIs and JavaScript, search the web on demand — do not assume.
+- `docs/Tunkelang - A Numerical Optimization Approach to General Graph Drawing.txt` — Tunkelang (1999) PhD thesis. Describes the exact
+  force-directed layout algorithm used by PopART. Consult before implementing
+  NetworkLayout.js. Key sections: 5.2 (Force Laws), 6.3 (Barnes-Hut), 7.3 (Conjugate Gradient).
 
 ## Porting rules
 
