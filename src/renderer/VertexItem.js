@@ -1,5 +1,3 @@
-import { arc, pie } from "d3";
-
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_FILL = "#999999";
 const INFERRED_FILL = "#333333";
@@ -54,22 +52,62 @@ function appendSampledCircle(group, radius, fill, stroke) {
   group.appendChild(circle);
 }
 
-function appendPieSections(group, radius, traits, traitColors, defaultFill, stroke) {
-  const pieGenerator = pie()
-    .value((entry) => entry.value)
-    .sort(null);
-  const arcGenerator = arc()
-    .innerRadius(0)
-    .outerRadius(radius);
+function appendSelectionRing(group, radius) {
+  const circle = createSvgElement("circle");
+  circle.setAttribute("class", "selection-ring");
+  circle.setAttribute("cx", "0");
+  circle.setAttribute("cy", "0");
+  circle.setAttribute("r", String(radius));
+  circle.setAttribute("fill", "none");
+  circle.setAttribute("stroke", "none");
+  group.appendChild(circle);
+}
 
-  for (const section of pieGenerator(traits)) {
+function appendPieSections(group, radius, traits, traitColors, defaultFill, stroke) {
+  const total = traits.reduce((sum, entry) => sum + entry.value, 0);
+  let startAngle = -Math.PI / 2;
+
+  for (const entry of traits) {
+    const angle = total > 0 ? (entry.value / total) * Math.PI * 2 : 0;
+    const endAngle = startAngle + angle;
     const path = createSvgElement("path");
-    path.setAttribute("d", arcGenerator(section));
-    path.setAttribute("fill", traitColors[section.data.index] ?? defaultFill);
+    path.setAttribute("d", sectorPath(radius, startAngle, endAngle));
+    path.setAttribute("fill", traitColors[entry.index] ?? defaultFill);
     path.setAttribute("stroke", stroke);
     path.setAttribute("stroke-width", "1");
     group.appendChild(path);
+    startAngle = endAngle;
   }
+}
+
+function pointOnCircle(radius, angle) {
+  return {
+    x: Math.cos(angle) * radius,
+    y: Math.sin(angle) * radius,
+  };
+}
+
+function sectorPath(radius, startAngle, endAngle) {
+  const start = pointOnCircle(radius, startAngle);
+  const end = pointOnCircle(radius, endAngle);
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+
+  if (Math.abs(endAngle - startAngle) >= Math.PI * 2 - 1e-9) {
+    return [
+      `M 0 0`,
+      `L ${start.x} ${start.y}`,
+      `A ${radius} ${radius} 0 1 1 ${-start.x} ${-start.y}`,
+      `A ${radius} ${radius} 0 1 1 ${start.x} ${start.y}`,
+      "Z",
+    ].join(" ");
+  }
+
+  return [
+    "M 0 0",
+    `L ${start.x} ${start.y}`,
+    `A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`,
+    "Z",
+  ].join(" ");
 }
 
 function appendLabel(group, vertex, radius, fill) {
@@ -106,10 +144,13 @@ export function renderVertexItem(vertex, options = {}) {
   group.setAttribute("transform", `translate(${x}, ${y})`);
 
   if (vertex.info?.inferred === true) {
+    const radius = baseRadius * 0.4;
+    appendSelectionRing(group, radius);
+
     const circle = createSvgElement("circle");
     circle.setAttribute("cx", "0");
     circle.setAttribute("cy", "0");
-    circle.setAttribute("r", String(baseRadius * 0.4));
+    circle.setAttribute("r", String(radius));
     circle.setAttribute("fill", inferredFill);
     circle.setAttribute("class", "vertex-inferred");
     group.appendChild(circle);
@@ -118,6 +159,7 @@ export function renderVertexItem(vertex, options = {}) {
 
   const radius = vertexRadius(vertex, baseRadius);
   const traits = traitEntries(vertex.info?.traits);
+  appendSelectionRing(group, radius);
 
   if (traits.length > 0) {
     appendPieSections(group, radius, traits, traitColors, defaultFill, stroke);

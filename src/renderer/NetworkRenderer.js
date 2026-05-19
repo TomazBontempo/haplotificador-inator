@@ -73,8 +73,11 @@ export function renderNetwork(graph, options = {}) {
   const normalizedOptions = normalizeOptions(options);
   const svg = createSvgElement("svg");
   svg.setAttribute("xmlns", SVG_NS);
-  svg.setAttribute("width", String(normalizedOptions.width));
-  svg.setAttribute("height", String(normalizedOptions.height));
+  const useResponsiveSize =
+    normalizedOptions.width === DEFAULT_OPTIONS.width &&
+    normalizedOptions.height === DEFAULT_OPTIONS.height;
+  svg.setAttribute("width", useResponsiveSize ? "100%" : String(normalizedOptions.width));
+  svg.setAttribute("height", useResponsiveSize ? "100%" : String(normalizedOptions.height));
   svg.setAttribute("viewBox", `0 0 ${normalizedOptions.width} ${normalizedOptions.height}`);
 
   const viewportGroup = createSvgElement("g");

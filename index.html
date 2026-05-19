@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Haplotificador-inator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <nav id="toolbar">
+      <div class="menu-wrapper">
+        <button id="file-menu-btn" type="button">File</button>
+        <div id="file-menu" class="dropdown-menu hidden">
+          <button id="open-nex" type="button">Open .nex file</button>
+          <button id="open-hapnet" type="button">Open .hapnet file</button>
+          <hr>
+          <button id="save" type="button">Save&nbsp;&nbsp;Ctrl+S</button>
+          <button id="save-as" type="button">Save As&nbsp;&nbsp;Ctrl+Shift+S</button>
+        </div>
+      </div>
+      <button id="algorithm-menu-btn" type="button">Algorithm</button>
+      <button id="save-btn" type="button" title="Save (Ctrl+S)">💾</button>
+      <button id="save-as-btn" type="button" title="Save As (Ctrl+Shift+S)">💾+</button>
+      <button id="export-btn" type="button">Export</button>
+      <input id="nex-file-input" class="hidden" type="file" accept=".nex,.nexus">
+      <input id="hapnet-file-input" class="hidden" type="file" accept=".hapnet">
+      <div id="algorithm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="algorithm-title">
+        <div class="modal-dialog">
+          <h2 id="algorithm-title">Algorithm</h2>
+          <fieldset id="algorithm-options">
+            <legend>Select algorithm</legend>
+            <label><input type="radio" name="algorithm" value="MSN"> MSN</label>
+            <label><input type="radio" name="algorithm" value="MJN" checked> MJN</label>
+            <label><input type="radio" name="algorithm" value="TCS"> TCS</label>
+            <label><input type="radio" name="algorithm" value="IntNJ"> IntNJ</label>
+          </fieldset>
+          <div id="algorithm-params"></div>
+          <div class="modal-actions">
+            <button id="algorithm-ok" type="button">OK</button>
+            <button id="algorithm-cancel" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <div id="export-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="export-title">
+        <div class="modal-dialog">
+          <h2 id="export-title">Export</h2>
+          <fieldset id="export-format-options">
+            <legend>Format</legend>
+            <label><input type="radio" name="export-format" value="PNG" checked> PNG</label>
+            <label><input type="radio" name="export-format" value="SVG"> SVG</label>
+            <label><input type="radio" name="export-format" value="PDF"> PDF</label>
+          </fieldset>
+          <label>Width <input id="export-width" type="number" min="1" value="2000"></label>
+          <label>Height <input id="export-height" type="number" min="1" value="2000"></label>
+          <label><input id="export-transparent" type="checkbox"> Transparent background</label>
+          <p id="export-warning" class="hidden warning">For publication quality, use at least 3000×3000</p>
+          <div class="modal-actions">
+            <button id="export-confirm" type="button">Export</button>
+            <button id="export-cancel" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <div id="restore-modal" class="hidden">
+        <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="restore-title">
+          <div class="modal-dialog">
+            <h3 id="restore-title">Restore previous session?</h3>
+            <p>A previous session was found. Would you like to continue where you left off?</p>
+            <div class="modal-actions">
+              <button id="restore-confirm" type="button">Restore</button>
+              <button id="restore-cancel" type="button">Start fresh</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+    <div id="main">
+      <aside id="data-panel">
+        <button id="collapse-data" type="button">◀</button>
+        <div id="data-content">
+          <h2>Data View</h2>
+        </div>
+      </aside>
+      <main id="viewport">
+        <div id="svg-container">
+          <p>Open a .nex file and run an algorithm to see the network</p>
+        </div>
+        <div id="zoom-controls">
+          <button id="zoom-in" type="button">+</button>
+          <button id="zoom-out" type="button">-</button>
+          <button id="zoom-fit" type="button">⊡</button>
+        </div>
+      </main>
+      <aside id="properties-panel">
+        <button id="collapse-props" type="button">▶</button>
+        <div id="props-content">
+          <p>Select a node or edge to see properties</p>
+        </div>
+      </aside>
+    </div>
+    <footer id="status-bar">
+      <span id="status-filename">No file loaded</span>
+      <span id="status-algorithm">—</span>
+      <span id="status-haplotypes">—</span>
+      <span id="status-edges">—</span>
+      <span id="status-save">—</span>
+      <span id="status-mask" class="hidden warning">⚠ 0 sites masked</span>
+    </footer>
+    <div id="progress-overlay" class="hidden">
+      <div class="progress-dialog">
+        <p id="progress-stage">Parsing file...</p>
+        <progress id="progress-bar" value="0" max="100"></progress>
+        <button id="progress-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="src/ui/NetworkView.js"></script>
+</body>
+</html>

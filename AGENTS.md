@@ -31,6 +31,13 @@ This project is part of a TCC (Trabalho de Conclusão de Curso) — see `docs/` 
 
 ## Development tools
 
+### Running npm on Windows
+
+- Always use `npm.cmd` instead of `npm` to avoid PowerShell execution policy blocks.
+- Example: `npm.cmd test` instead of `npm test`
+- Example: `npm.cmd install` instead of `npm install`
+- Never attempt `npm` first and fall back — go straight to `npm.cmd`.
+
 ### Reading PDF documentation
 
 - `docs/` contains PDF reference files.
@@ -254,3 +261,4 @@ so the agent understands the intended behavior before implementing.
     - [ ] Implement edge label / tick mark toggle.
     - [ ] Add export size recommendation warning for print quality
           (minimum 3000x3000 for publications).
+    - [ ] Implement undo/redo history for node manipulation and visual changes

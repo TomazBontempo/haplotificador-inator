@@ -1,4 +1,3 @@
-import { jsPDF } from "jspdf";
 import { renderNetwork } from "../renderer/NetworkRenderer.js";
 
 const SVG_MIME_TYPE = "image/svg+xml";
@@ -257,6 +256,47 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function isAbortError(error) {
+  return error?.name === "AbortError";
+}
+
+function getWindow() {
+  return globalThis.window ?? null;
+}
+
+async function writeBlobToPickedFile(blob, filename, typeOptions) {
+  const currentWindow = getWindow();
+  if (typeof currentWindow?.showSaveFilePicker !== "function") {
+    triggerDownload(blob, filename);
+    return;
+  }
+
+  try {
+    const fileHandle = await currentWindow.showSaveFilePicker({
+      suggestedName: filename,
+      types: [typeOptions],
+    });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  } catch (error) {
+    if (isAbortError(error)) {
+      return;
+    }
+    throw error;
+  }
+}
+
+async function loadJsPDF() {
+  try {
+    const module = await import("../../node_modules/jspdf/dist/jspdf.es.min.js");
+    return module.jsPDF;
+  } catch {
+    const module = await import("jspdf");
+    return module.jsPDF;
+  }
+}
+
 export async function exportSVG(graph, visualOptions, exportOptions) {
   const { svg, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions } =
     renderExportSvg(graph, visualOptions, exportOptions);
@@ -266,7 +306,14 @@ export async function exportSVG(graph, visualOptions, exportOptions) {
   }
 
   const blob = new Blob([serializeSvg(svg)], { type: SVG_MIME_TYPE });
-  triggerDownload(blob, filenameWithExtension(normalizedExportOptions.filename, "svg"));
+  await writeBlobToPickedFile(
+    blob,
+    filenameWithExtension(normalizedExportOptions.filename, "svg"),
+    {
+      description: "SVG Image",
+      accept: { [SVG_MIME_TYPE]: [".svg"] },
+    },
+  );
 }
 
 export async function exportPNG(graph, visualOptions, exportOptions) {
@@ -276,12 +323,20 @@ export async function exportPNG(graph, visualOptions, exportOptions) {
     exportOptions,
   );
   const blob = await canvasToBlob(canvas, PNG_MIME_TYPE);
-  triggerDownload(blob, filenameWithExtension(normalizedExportOptions.filename, "png"));
+  await writeBlobToPickedFile(
+    blob,
+    filenameWithExtension(normalizedExportOptions.filename, "png"),
+    {
+      description: "PNG Image",
+      accept: { [PNG_MIME_TYPE]: [".png"] },
+    },
+  );
 }
 
 export async function exportPDF(graph, visualOptions, exportOptions) {
   const { canvas, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions } =
     await renderExportCanvas(graph, visualOptions, exportOptions);
+  const jsPDF = await loadJsPDF();
   const pdf = new jsPDF({
     orientation:
       normalizedExportOptions.width > normalizedExportOptions.height ? "landscape" : "portrait",
@@ -304,6 +359,16 @@ export async function exportPDF(graph, visualOptions, exportOptions) {
   );
 
   const filename = filenameWithExtension(normalizedExportOptions.filename, "pdf");
-  pdf.save(filename);
-  triggerDownload(pdf.output("blob"), filename);
+  const blob = pdf.output("blob");
+  if (typeof getWindow()?.showSaveFilePicker !== "function" && typeof pdf.save === "function") {
+    pdf.save(filename);
+  }
+  await writeBlobToPickedFile(
+    blob,
+    filename,
+    {
+      description: "PDF Document",
+      accept: { "application/pdf": [".pdf"] },
+    },
+  );
 }
