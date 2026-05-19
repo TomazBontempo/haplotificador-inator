@@ -230,21 +230,27 @@ so the agent understands the intended behavior before implementing.
   - [x] Implement Save As using File System Access API.
   - [x] Ensure network topology, node positions, and visual state are persisted separately from the Nexus file.
 
-- [ ] 11 - Export
-  - [ ] Implement PNG export in Exporter.js.
-  - [ ] Implement SVG export in Exporter.js.
-  - [ ] Implement PDF export in Exporter.js.
+- [x] 11 - Export
+  - [x] Implement PNG export in Exporter.js.
+  - [x] Implement SVG export in Exporter.js.
+  - [x] Implement PDF export in Exporter.js.
 
 - [ ] 12 - UI
-  - [ ] Implement NetworkView.js connecting all modules.
-  - [ ] Implement controls for node manipulation, colors, fonts, and zoom.
-  - [ ] Implement Web Workers for algorithms and layout.
-  - [ ] Implement auto-save timer and configurable interval.
-  - [ ] Implement Save and Save As — keyboard shortcuts (Ctrl+S / Ctrl+Shift+S),
-        toolbar icon, and File menu dropdown options.
-  - [ ] Implement project file loading flows (.nex and .hapnet) with correct warnings.
-  - [ ] Implement SiteMask warning when sites are masked on file load.
-  - [ ] Implement edge label / tick mark toggle.
-  - [ ] Validate the full pipeline end-to-end with a real .nex file.
-  - [ ] Implement color customization for edges, vertices, and background with color picker
-  - [ ]Add export size recommendation warning for print quality (minimum 3000x3000 for publications)
+  - [ ] 12a - Core UI Scaffold
+    - [ ] Implement NetworkView.js connecting all modules.
+    - [ ] Implement Web Workers for algorithms and layout.
+    - [ ] Validate the full pipeline end-to-end with a real .nex file.
+
+  - [ ] 12b - File Management
+    - [ ] Implement project file loading flows (.nex and .hapnet) with correct warnings.
+    - [ ] Implement SiteMask warning when sites are masked on file load.
+    - [ ] Implement auto-save timer and configurable interval.
+    - [ ] Implement Save and Save As — keyboard shortcuts (Ctrl+S / Ctrl+Shift+S),
+          toolbar icon, and File menu dropdown options.
+
+  - [ ] 12c - Visual Controls
+    - [ ] Implement controls for node manipulation, colors, fonts, and zoom.
+    - [ ] Implement color customization for edges, vertices, and background with color picker.
+    - [ ] Implement edge label / tick mark toggle.
+    - [ ] Add export size recommendation warning for print quality
+          (minimum 3000x3000 for publications).
