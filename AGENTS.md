@@ -23,11 +23,23 @@ This project is part of a TCC (Trabalho de Conclusão de Curso) — see `docs/` 
   Consult before implementing any algorithm.
 - `docs/popart.pdf` — Official PopART user manual. Contains exact Nexus block syntax
   with real examples. Consult before implementing the parser.
-- Always prefer these local docs over assumed knowledge.
-- For Web APIs and JavaScript, search the web on demand — do not assume.
-- `docs/Tunkelang - A Numerical Optimization Approach to General Graph Drawing.txt` — Tunkelang (1999) PhD thesis. Describes the exact
+- `docs/Tunkelang1999.txt` — Tunkelang (1999) PhD thesis. Describes the exact
   force-directed layout algorithm used by PopART. Consult before implementing
   NetworkLayout.js. Key sections: 5.2 (Force Laws), 6.3 (Barnes-Hut), 7.3 (Conjugate Gradient).
+- Always prefer these local docs over assumed knowledge.
+- For Web APIs and JavaScript, search the web on demand — do not assume.
+
+## Development tools
+
+### Reading PDF documentation
+
+- `docs/` contains PDF reference files.
+- To read a PDF use:
+  `node -e "require('pdf-parse')(require('fs').readFileSync('docs/file.pdf')).then(d => console.log(d.text))"`
+- `pdf-parse` is installed as a dev dependency for this purpose.
+- Never install Python PDF tools (pymupdf, pdfminer, pdfjs or similar).
+- Never commit extracted text files.
+- Never add PDF extraction tools to production dependencies.
 
 ## Porting rules
 
@@ -39,7 +51,8 @@ This project is part of a TCC (Trabalho de Conclusão de Curso) — see `docs/` 
 ## Key constraints
 
 - No server-side processing. Everything runs in the browser.
-- Heavy computation (algorithms, layout) must run in Web Workers to keep the UI responsive.
+- Heavy computation (algorithms, layout) currently runs on the main thread.
+  Web Worker integration is planned for Milestone 12.
 - Nexus (.nex) is the standard import/export format. Internal state is stored in IndexedDB.
 - The rendering layer must treat the network as a logical model first, visual projection second.
 
@@ -62,7 +75,7 @@ Two types of automated tests are used in this project:
 
 **What is NOT automatically tested:**
 
-- Renderer, layout, and UI — these are validated visually by the developer.
+- Renderer, layout, UI, and storage — these are validated visually or manually by the developer.
 
 **Rule for the agent:**
 After implementing or modifying any module that has tests, always run the test suite
@@ -99,7 +112,7 @@ to pass parity tests. See `test/fixtures/notes.txt` for the original record.
 ## Pipeline
 
 The system follows a strict pipeline, mirroring the original PopART:
-File input → parser → model → algorithms (workers) → layout (workers) → renderer → ui
+File input → parser → model → algorithms → layout → renderer → ui
 ↕
 storage
 ↕
@@ -120,6 +133,52 @@ export
 - All algorithm parity tests using real fixture data must apply `applyUndefinedSiteMask`.
 - The SiteMask check must be applied before constructing HapNet in all parity tests
   using real fixture data. Tapir tests that pass without masking must remain unmasked.
+- Web Workers are not yet implemented. Algorithms and layout run on the main thread.
+  Worker integration will be added in Milestone 12.
+
+## Project file loading flows
+
+These flows must be implemented in Milestone 12 (UI). They are documented here
+so the agent understands the intended behavior before implementing.
+
+### Opening a .nex file (new project):
+
+1. Check if auto-save exists via `hasAutoSave()`
+2. If yes → show warning: "Starting a new project will clear your current saves. Continue?"
+   - If confirmed → call `clearAutoSave()` → load and parse .nex file
+   - If cancelled → stay on current project
+3. If no → load and parse .nex file directly, no dialog
+
+### Opening a .hapnet file (load saved project):
+
+1. If current project has unsaved changes → show warning:
+   "You have unsaved changes. Save before continuing?"
+   - Save → open Save/Save As dialog → then load .hapnet file
+   - Don't Save → discard current state → load .hapnet file
+   - Cancel → stay on current project
+2. Load .hapnet file via `loadFromFile()`
+3. Reconstruct Graph from saved state
+4. Pass directly to renderer — skip parser, HapNet, and algorithm
+
+### Save (Ctrl+S):
+
+- If Save As has never been used → save to IndexedDB via `autoSave()`
+- If Save As has been used → save to fileHandle via `saveToHandle()`
+
+### Save As (Ctrl+Shift+S):
+
+- Open file picker via `saveAs()`
+- Store returned fileHandle for future Ctrl+S saves
+- From this point, Ctrl+S saves to that file
+
+## Storage behavior
+
+- Auto-save: single IndexedDB slot, overwrites on every save
+- Auto-save interval: default 5 minutes, configurable by user in Milestone 12
+- Manual save: handled by Save As → writes `.hapnet` file to user-chosen location
+- No multiple save slots — simplicity is preferred over complexity
+- Firefox does not support the File System Access API — Save As is unavailable.
+  Auto-save via IndexedDB still works in Firefox.
 
 ## Milestones
 
@@ -151,22 +210,25 @@ export
   - [x] Add parity tests validating output against PopART's results.
 
 - [ ] 07 - IntNJ
-  - [ ] Research and select a JavaScript linear programming solver.
-  - [ ] Implement the IntNJ algorithm in IntNJ.js.
-  - [ ] Add parity tests validating output against PopART's results.
+  - [x] Research and select a JavaScript linear programming solver.
+  - [x] Implement the IntNJ algorithm in IntNJ.js.
+  - [x] Add parity tests validating output against PopART's results.
+  - [ ] Resolve complex dolphins parity failure due to LP solver degeneracy.
+        Awaiting biological validation from researchers (Julia and Mariana, MAQUA/UERJ).
+        See open GitHub issue in Milestone 07.
 
-- [ ] 08 - Layout
-  - [ ] Implement force-directed spring layout in NetworkLayout.js.
-  - [ ] Offload layout computation to a Web Worker via layoutWorker.js.
+- [x] 08 - Layout
+  - [x] Implement force-directed spring layout in NetworkLayout.js.
 
-- [ ] 09 - Renderer
-  - [ ] Implement NetworkRenderer.js for SVG/Canvas rendering.
-  - [ ] Implement VertexItem.js with proportional sizing and pie chart traits.
-  - [ ] Implement EdgeItem.js with mutation distance representation.
+- [x] 09 - Renderer
+  - [x] Implement NetworkRenderer.js for SVG rendering.
+  - [x] Implement VertexItem.js with proportional sizing and pie chart traits.
+  - [x] Implement EdgeItem.js with mutation distance representation.
 
-- [ ] 10 - Storage
-  - [ ] Implement ProjectStorage.js using IndexedDB.
-  - [ ] Ensure network topology, node positions, and visual state are persisted separately from the Nexus file.
+- [x] 10 - Storage
+  - [x] Implement ProjectStorage.js using IndexedDB.
+  - [x] Implement Save As using File System Access API.
+  - [x] Ensure network topology, node positions, and visual state are persisted separately from the Nexus file.
 
 - [ ] 11 - Export
   - [ ] Implement PNG export in Exporter.js.
@@ -176,4 +238,11 @@ export
 - [ ] 12 - UI
   - [ ] Implement NetworkView.js connecting all modules.
   - [ ] Implement controls for node manipulation, colors, fonts, and zoom.
+  - [ ] Implement Web Workers for algorithms and layout.
+  - [ ] Implement auto-save timer and configurable interval.
+  - [ ] Implement Save and Save As — keyboard shortcuts (Ctrl+S / Ctrl+Shift+S),
+        toolbar icon, and File menu dropdown options.
+  - [ ] Implement project file loading flows (.nex and .hapnet) with correct warnings.
+  - [ ] Implement SiteMask warning when sites are masked on file load.
+  - [ ] Implement edge label / tick mark toggle.
   - [ ] Validate the full pipeline end-to-end with a real .nex file.

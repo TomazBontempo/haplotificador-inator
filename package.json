@@ -2,7 +2,8 @@
   "type": "module",
   "devDependencies": {
     "jest": "^30.4.2",
-    "jest-environment-jsdom": "^30.4.1"
+    "jest-environment-jsdom": "^30.4.1",
+    "pdf-parse": "^2.4.5"
   },
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --passWithNoTests"
