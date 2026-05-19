@@ -1,4 +1,7 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
+const DEFAULT_EDGE_COLOR = "#666666";
+const DEFAULT_EDGE_WIDTH = 1.5;
+const DEFAULT_LABEL_COLOR = "#333333";
 
 function createSvgElement(name) {
   return document.createElementNS(SVG_NS, name);
@@ -10,7 +13,11 @@ function numericValue(value, fallback) {
 }
 
 export function renderEdgeItem(edge, options = {}) {
-  const showEdgeLabels = options.showEdgeLabels ?? true;
+  const edgeOptions = options.edges ?? {};
+  const showEdgeLabels = edgeOptions.showLabels ?? options.showEdgeLabels ?? true;
+  const edgeColor = edgeOptions.color ?? DEFAULT_EDGE_COLOR;
+  const edgeWidth = numericValue(edgeOptions.width, DEFAULT_EDGE_WIDTH);
+  const labelColor = edgeOptions.labelColor ?? DEFAULT_LABEL_COLOR;
   const weight = numericValue(edge.weight ?? edge.info?.weight, 1);
   const fromX = numericValue(edge.from?.x, 0);
   const fromY = numericValue(edge.from?.y, 0);
@@ -26,8 +33,8 @@ export function renderEdgeItem(edge, options = {}) {
   line.setAttribute("y1", String(fromY));
   line.setAttribute("x2", String(toX));
   line.setAttribute("y2", String(toY));
-  line.setAttribute("stroke", "#666666");
-  line.setAttribute("stroke-width", "1.5");
+  line.setAttribute("stroke", edgeColor);
+  line.setAttribute("stroke-width", String(edgeWidth));
   group.appendChild(line);
 
   if (showEdgeLabels && weight > 1) {
@@ -38,7 +45,7 @@ export function renderEdgeItem(edge, options = {}) {
     label.setAttribute("text-anchor", "middle");
     label.setAttribute("dominant-baseline", "central");
     label.setAttribute("font-size", "10px");
-    label.setAttribute("fill", "#333333");
+    label.setAttribute("fill", labelColor);
     label.setAttribute("class", "edge-label");
     group.appendChild(label);
   }

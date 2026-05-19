@@ -6,9 +6,26 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_OPTIONS = Object.freeze({
   width: 1000,
   height: 1000,
-  traitColors: [],
-  showEdgeLabels: true,
+  background: {
+    color: "#ffffff",
+  },
+  edges: {
+    color: "#666666",
+    width: 1.5,
+    labelColor: "#333333",
+    showLabels: true,
+  },
+  vertices: {
+    defaultColor: "#999999",
+    inferredColor: "#333333",
+    traitColors: [],
+    strokeColor: "#333333",
+    labelColor: "#333333",
+  },
   baseRadius: 10,
+  zoom: 1,
+  panX: 0,
+  panY: 0,
 });
 
 function createSvgElement(name) {
@@ -21,19 +38,56 @@ function assertGraphLike(graph) {
   }
 }
 
+function normalizeOptions(options) {
+  const edges = {
+    ...DEFAULT_OPTIONS.edges,
+    ...(options.edges ?? {}),
+  };
+  const vertices = {
+    ...DEFAULT_OPTIONS.vertices,
+    ...(options.vertices ?? {}),
+  };
+
+  if (Array.isArray(options.traitColors)) {
+    vertices.traitColors = options.traitColors;
+  }
+  if (options.showEdgeLabels !== undefined) {
+    edges.showLabels = options.showEdgeLabels;
+  }
+
+  return {
+    ...DEFAULT_OPTIONS,
+    ...options,
+    background: {
+      ...DEFAULT_OPTIONS.background,
+      ...(options.background ?? {}),
+    },
+    edges,
+    vertices,
+  };
+}
+
 export function renderNetwork(graph, options = {}) {
   assertGraphLike(graph);
 
-  const normalizedOptions = { ...DEFAULT_OPTIONS, ...options };
+  const normalizedOptions = normalizeOptions(options);
   const svg = createSvgElement("svg");
   svg.setAttribute("xmlns", SVG_NS);
   svg.setAttribute("width", String(normalizedOptions.width));
   svg.setAttribute("height", String(normalizedOptions.height));
   svg.setAttribute("viewBox", `0 0 ${normalizedOptions.width} ${normalizedOptions.height}`);
 
+  const viewportGroup = createSvgElement("g");
+  viewportGroup.setAttribute("class", "viewport");
+  viewportGroup.setAttribute(
+    "transform",
+    `translate(${normalizedOptions.panX}, ${normalizedOptions.panY}) scale(${normalizedOptions.zoom})`,
+  );
+  svg.appendChild(viewportGroup);
+
   const edgesGroup = createSvgElement("g");
   edgesGroup.setAttribute("class", "edges");
-  svg.appendChild(edgesGroup);
+  viewportGroup.appendChild(edgesGroup);
 
   for (const edge of graph.edges) {
     edgesGroup.appendChild(renderEdgeItem(edge, normalizedOptions));
@@ -41,12 +95,10 @@ export function renderNetwork(graph, options = {}) {
 
   const verticesGroup = createSvgElement("g");
   verticesGroup.setAttribute("class", "vertices");
-  svg.appendChild(verticesGroup);
+  viewportGroup.appendChild(verticesGroup);
 
   for (const vertex of graph.vertices) {
-    verticesGroup.appendChild(
-      renderVertexItem(vertex, normalizedOptions.traitColors, normalizedOptions),
-    );
+    verticesGroup.appendChild(renderVertexItem(vertex, normalizedOptions));
   }
 
   return svg;

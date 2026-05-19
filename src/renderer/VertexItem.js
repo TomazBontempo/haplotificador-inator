@@ -3,6 +3,8 @@ import { arc, pie } from "d3";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_FILL = "#999999";
 const INFERRED_FILL = "#333333";
+const DEFAULT_STROKE = "#333333";
+const DEFAULT_LABEL_FILL = "#333333";
 const DEFAULT_BASE_RADIUS = 10;
 
 function createSvgElement(name) {
@@ -41,18 +43,18 @@ function traitEntries(traits) {
     .filter((entry) => entry.value > 0);
 }
 
-function appendSampledCircle(group, radius, fill) {
+function appendSampledCircle(group, radius, fill, stroke) {
   const circle = createSvgElement("circle");
   circle.setAttribute("cx", "0");
   circle.setAttribute("cy", "0");
   circle.setAttribute("r", String(radius));
   circle.setAttribute("fill", fill);
-  circle.setAttribute("stroke", "#333333");
+  circle.setAttribute("stroke", stroke);
   circle.setAttribute("stroke-width", "1");
   group.appendChild(circle);
 }
 
-function appendPieSections(group, radius, traits, traitColors) {
+function appendPieSections(group, radius, traits, traitColors, defaultFill, stroke) {
   const pieGenerator = pie()
     .value((entry) => entry.value)
     .sort(null);
@@ -63,14 +65,14 @@ function appendPieSections(group, radius, traits, traitColors) {
   for (const section of pieGenerator(traits)) {
     const path = createSvgElement("path");
     path.setAttribute("d", arcGenerator(section));
-    path.setAttribute("fill", traitColors[section.data.index] ?? DEFAULT_FILL);
-    path.setAttribute("stroke", "#333333");
+    path.setAttribute("fill", traitColors[section.data.index] ?? defaultFill);
+    path.setAttribute("stroke", stroke);
     path.setAttribute("stroke-width", "1");
     group.appendChild(path);
   }
 }
 
-function appendLabel(group, vertex, radius) {
+function appendLabel(group, vertex, radius, fill) {
   const label = vertex.label ?? vertex.name ?? "";
   if (!label) {
     return;
@@ -82,13 +84,19 @@ function appendLabel(group, vertex, radius) {
   text.setAttribute("y", String(radius + 14));
   text.setAttribute("text-anchor", "middle");
   text.setAttribute("font-size", "12px");
-  text.setAttribute("fill", "#333333");
+  text.setAttribute("fill", fill);
   text.setAttribute("class", "vertex-label");
   group.appendChild(text);
 }
 
-export function renderVertexItem(vertex, traitColors = [], options = {}) {
+export function renderVertexItem(vertex, options = {}) {
   const baseRadius = numericValue(options.baseRadius, DEFAULT_BASE_RADIUS);
+  const vertexOptions = options.vertices ?? {};
+  const defaultFill = vertexOptions.defaultColor ?? DEFAULT_FILL;
+  const inferredFill = vertexOptions.inferredColor ?? INFERRED_FILL;
+  const traitColors = vertexOptions.traitColors ?? [];
+  const stroke = vertexOptions.strokeColor ?? DEFAULT_STROKE;
+  const labelFill = vertexOptions.labelColor ?? DEFAULT_LABEL_FILL;
   const group = createSvgElement("g");
   const x = numericValue(vertex.x, 0);
   const y = numericValue(vertex.y, 0);
@@ -102,7 +110,7 @@ export function renderVertexItem(vertex, traitColors = [], options = {}) {
     circle.setAttribute("cx", "0");
     circle.setAttribute("cy", "0");
     circle.setAttribute("r", String(baseRadius * 0.4));
-    circle.setAttribute("fill", INFERRED_FILL);
+    circle.setAttribute("fill", inferredFill);
     circle.setAttribute("class", "vertex-inferred");
     group.appendChild(circle);
     return group;
@@ -112,12 +120,12 @@ export function renderVertexItem(vertex, traitColors = [], options = {}) {
   const traits = traitEntries(vertex.info?.traits);
 
   if (traits.length > 0) {
-    appendPieSections(group, radius, traits, traitColors);
+    appendPieSections(group, radius, traits, traitColors, defaultFill, stroke);
   } else {
-    appendSampledCircle(group, radius, DEFAULT_FILL);
+    appendSampledCircle(group, radius, defaultFill, stroke);
   }
 
-  appendLabel(group, vertex, radius);
+  appendLabel(group, vertex, radius, labelFill);
 
   return group;
 }

@@ -246,3 +246,5 @@ so the agent understands the intended behavior before implementing.
   - [ ] Implement SiteMask warning when sites are masked on file load.
   - [ ] Implement edge label / tick mark toggle.
   - [ ] Validate the full pipeline end-to-end with a real .nex file.
+  - [ ] Implement color customization for edges, vertices, and background with color picker
+  - [ ]Add export size recommendation warning for print quality (minimum 3000x3000 for publications)
