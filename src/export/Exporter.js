@@ -2,7 +2,6 @@ import { renderNetwork } from "../renderer/NetworkRenderer.js";
 
 const SVG_MIME_TYPE = "image/svg+xml";
 const PNG_MIME_TYPE = "image/png";
-const JSPDF_CDN_URL = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
 const DEFAULT_EXPORT_OPTIONS = Object.freeze({
   filename: "network",
   transparent: false,
@@ -289,14 +288,10 @@ async function writeBlobToPickedFile(blob, filename, typeOptions) {
 }
 
 async function loadJsPDF() {
-  const module =
-    globalThis.process?.env?.NODE_ENV === "test"
-      ? await import("jspdf")
-      : await import(JSPDF_CDN_URL);
-  const jsPDF = module.jsPDF || module.default?.jsPDF || globalThis.jspdf?.jsPDF;
+  const { jsPDF } = await import("jspdf");
 
   if (!jsPDF) {
-    throw new Error("jsPDF failed to load from CDN.");
+    throw new Error("jsPDF failed to load.");
   }
 
   return jsPDF;

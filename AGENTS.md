@@ -38,6 +38,15 @@ This project is part of a TCC (Trabalho de Conclusão de Curso) — see `docs/` 
 - Example: `npm.cmd install` instead of `npm install`
 - Never attempt `npm` first and fall back — go straight to `npm.cmd`.
 
+### Running the browser app
+
+- Development: `npm.cmd run dev`
+  Opens at `http://localhost:5173`
+- Production build: `npm.cmd run build`
+  Produces `dist/` folder for Vercel deployment
+- Preview production build: `npm.cmd run preview`
+- Never open `index.html` directly from disk (`file://` breaks ES modules)
+
 ### Reading PDF documentation
 
 - `docs/` contains PDF reference files.
