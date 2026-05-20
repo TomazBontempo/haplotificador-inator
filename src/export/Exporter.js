@@ -2,6 +2,7 @@ import { renderNetwork } from "../renderer/NetworkRenderer.js";
 
 const SVG_MIME_TYPE = "image/svg+xml";
 const PNG_MIME_TYPE = "image/png";
+const JSPDF_CDN_URL = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
 const DEFAULT_EXPORT_OPTIONS = Object.freeze({
   filename: "network",
   transparent: false,
@@ -288,13 +289,17 @@ async function writeBlobToPickedFile(blob, filename, typeOptions) {
 }
 
 async function loadJsPDF() {
-  try {
-    const module = await import("../../node_modules/jspdf/dist/jspdf.es.min.js");
-    return module.jsPDF;
-  } catch {
-    const module = await import("jspdf");
-    return module.jsPDF;
+  const module =
+    globalThis.process?.env?.NODE_ENV === "test"
+      ? await import("jspdf")
+      : await import(JSPDF_CDN_URL);
+  const jsPDF = module.jsPDF || module.default?.jsPDF || globalThis.jspdf?.jsPDF;
+
+  if (!jsPDF) {
+    throw new Error("jsPDF failed to load from CDN.");
   }
+
+  return jsPDF;
 }
 
 export async function exportSVG(graph, visualOptions, exportOptions) {
@@ -334,41 +339,48 @@ export async function exportPNG(graph, visualOptions, exportOptions) {
 }
 
 export async function exportPDF(graph, visualOptions, exportOptions) {
-  const { canvas, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions } =
-    await renderExportCanvas(graph, visualOptions, exportOptions);
-  const jsPDF = await loadJsPDF();
-  const pdf = new jsPDF({
-    orientation:
-      normalizedExportOptions.width > normalizedExportOptions.height ? "landscape" : "portrait",
-    unit: "px",
-    format: [normalizedExportOptions.width, normalizedExportOptions.height],
-  });
+  try {
+    const { canvas, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions } =
+      await renderExportCanvas(graph, visualOptions, exportOptions);
+    const jsPDF = await loadJsPDF();
+    const pdf = new jsPDF({
+      orientation:
+        normalizedExportOptions.width > normalizedExportOptions.height ? "landscape" : "portrait",
+      unit: "px",
+      format: [normalizedExportOptions.width, normalizedExportOptions.height],
+    });
 
-  if (!normalizedExportOptions.transparent) {
-    pdf.setFillColor(...hexToRgb(backgroundColor(normalizedVisualOptions)));
-    pdf.rect(0, 0, normalizedExportOptions.width, normalizedExportOptions.height, "F");
+    if (!normalizedExportOptions.transparent) {
+      pdf.setFillColor(...hexToRgb(backgroundColor(normalizedVisualOptions)));
+      pdf.rect(0, 0, normalizedExportOptions.width, normalizedExportOptions.height, "F");
+    }
+
+    pdf.addImage(
+      canvas.toDataURL(PNG_MIME_TYPE),
+      "PNG",
+      0,
+      0,
+      normalizedExportOptions.width,
+      normalizedExportOptions.height,
+    );
+
+    const filename = filenameWithExtension(normalizedExportOptions.filename, "pdf");
+    const blob = pdf.output("blob");
+    if (typeof getWindow()?.showSaveFilePicker !== "function" && typeof pdf.save === "function") {
+      pdf.save(filename);
+    }
+    await writeBlobToPickedFile(
+      blob,
+      filename,
+      {
+        description: "PDF Document",
+        accept: { "application/pdf": [".pdf"] },
+      },
+    );
+  } catch (err) {
+    console.error("PDF export failed:", err);
+    if (typeof alert === "function") {
+      alert(`PDF export failed: ${err.message}`);
+    }
   }
-
-  pdf.addImage(
-    canvas.toDataURL(PNG_MIME_TYPE),
-    "PNG",
-    0,
-    0,
-    normalizedExportOptions.width,
-    normalizedExportOptions.height,
-  );
-
-  const filename = filenameWithExtension(normalizedExportOptions.filename, "pdf");
-  const blob = pdf.output("blob");
-  if (typeof getWindow()?.showSaveFilePicker !== "function" && typeof pdf.save === "function") {
-    pdf.save(filename);
-  }
-  await writeBlobToPickedFile(
-    blob,
-    filename,
-    {
-      description: "PDF Document",
-      accept: { "application/pdf": [".pdf"] },
-    },
-  );
 }

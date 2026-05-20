@@ -6,9 +6,11 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import {
   __resetNetworkViewDependencies,
   __setNetworkViewDependencies,
+  buildSaveState,
   initNetworkView,
   save,
   state,
+  updateDataView,
 } from "../../src/ui/NetworkView.js";
 
 describe("NetworkView", () => {
@@ -44,6 +46,40 @@ describe("NetworkView", () => {
 
     button.click();
     expect(panel.classList.contains("collapsed")).toBe(false);
+  });
+
+  test("data view renders trait tree and alignment from parsed Nexus state", () => {
+    state.parsedNexus = sampleParsedNexus();
+
+    updateDataView();
+
+    const traitsContent = document.getElementById("tab-content-traits");
+    expect(traitsContent.textContent).toContain("Amazonia");
+    expect(traitsContent.textContent).toContain("(2 sequences)");
+    expect(traitsContent.textContent).toContain("(4 samples)");
+
+    const toggle = traitsContent.querySelector(".trait-toggle");
+    const childRow = traitsContent.querySelector(".trait-child-row");
+    expect(childRow.classList.contains("hidden")).toBe(true);
+    toggle.click();
+    expect(childRow.classList.contains("hidden")).toBe(false);
+    expect(traitsContent.textContent).toContain("H1");
+    expect(traitsContent.textContent).toContain("3");
+
+    document.getElementById("tab-alignment").click();
+    const alignmentContent = document.getElementById("tab-content-alignment");
+    expect(alignmentContent.classList.contains("hidden")).toBe(false);
+    expect(alignmentContent.querySelector(".nuc-a").textContent).toBe("A");
+    expect(alignmentContent.querySelector(".nuc-t").textContent).toBe("T");
+    expect(alignmentContent.querySelector(".nuc-g").textContent).toBe("G");
+    expect(alignmentContent.querySelector(".nuc-c").textContent).toBe("C");
+  });
+
+  test("save state includes parsed Nexus data for project restore", () => {
+    state.currentFile = { name: "tapir.nex" };
+    state.parsedNexus = sampleParsedNexus();
+
+    expect(buildSaveState().parsedNexus.traits.labels).toEqual(["Amazonia", "Cerrado"]);
   });
 
   test("properties panel toggles on collapse button click", () => {
@@ -179,6 +215,25 @@ function installPipelineMocks() {
       autoSave: jest.fn().mockResolvedValue(undefined),
     },
   });
+}
+
+function sampleParsedNexus() {
+  return {
+    taxa: ["H1", "H2"],
+    characters: {
+      matrix: {
+        H1: "ATGC-",
+        H2: "ACGTN",
+      },
+    },
+    traits: {
+      labels: ["Amazonia", "Cerrado"],
+      matrix: {
+        H1: [3, 0],
+        H2: [1, 2],
+      },
+    },
+  };
 }
 
 async function flushPromises() {

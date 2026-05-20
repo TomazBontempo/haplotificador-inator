@@ -10,6 +10,8 @@ const ZOOM_STEP = 0.2;
 const DRAG_THRESHOLD = 5;
 const AUTO_SAVE_INTERVAL = 300000;
 const SVG_NS = "http://www.w3.org/2000/svg";
+const DEFAULT_PANEL_WIDTH = 240;
+const MIN_PANEL_WIDTH = 180;
 
 const defaultDependencies = {
   parseNexus,
@@ -39,6 +41,14 @@ let rubberBandRect = null;
 let svgContainerResizeObserver = null;
 let pendingVertexGesture = null;
 let suppressNextSvgClick = false;
+let isResizingData = false;
+let isResizingProps = false;
+let resizeStartX = 0;
+let resizeStartXProps = 0;
+let resizeStartWidth = DEFAULT_PANEL_WIDTH;
+let resizeStartWidthProps = DEFAULT_PANEL_WIDTH;
+let dataPanelWidth = DEFAULT_PANEL_WIDTH;
+let propsPanelWidth = DEFAULT_PANEL_WIDTH;
 
 export function __setNetworkViewDependencies(overrides = {}) {
   dependencies = { ...dependencies, ...overrides };
@@ -86,6 +96,8 @@ function resetState() {
     delete state[key];
   }
   Object.assign(state, next);
+  dataPanelWidth = DEFAULT_PANEL_WIDTH;
+  propsPanelWidth = DEFAULT_PANEL_WIDTH;
 }
 
 function appShell() {
@@ -161,8 +173,16 @@ function appShell() {
         <aside id="data-panel">
           <button id="collapse-data" type="button">◀</button>
           <div id="data-content">
-            <h2>Data View</h2>
+            <div id="data-tabs">
+              <button id="tab-traits" class="tab-btn active" type="button">Traits</button>
+              <button id="tab-alignment" class="tab-btn" type="button">Alignment</button>
+            </div>
+            <div id="tab-content-traits" class="tab-content">
+              <p class="data-placeholder">Open a .nex file to see data</p>
+            </div>
+            <div id="tab-content-alignment" class="tab-content hidden"></div>
           </div>
+          <div id="data-resize-handle" class="resize-handle"></div>
         </aside>
         <main id="viewport">
           <div id="svg-container">
@@ -176,6 +196,7 @@ function appShell() {
         </main>
         <aside id="properties-panel">
           <button id="collapse-props" type="button">▶</button>
+          <div id="props-resize-handle" class="resize-handle"></div>
           <div id="props-content">
             <p>Select a node or edge to see properties</p>
           </div>
@@ -208,6 +229,10 @@ function ensureAppShell() {
 
 function byId(id) {
   return document.getElementById(id);
+}
+
+function blurClickedControl(event) {
+  event.currentTarget?.blur?.();
 }
 
 function setHidden(element, hidden) {
@@ -355,6 +380,7 @@ export function buildSaveState() {
     version: 1,
     savedAt: new Date().toISOString(),
     originalFilename: state.currentFile?.name ?? null,
+    parsedNexus: state.parsedNexus ? JSON.parse(JSON.stringify(state.parsedNexus)) : null,
     algorithm: state.algorithm,
     algorithmParams: { ...state.algorithmParams },
     graph: serializeGraph(state.graph),
@@ -520,9 +546,17 @@ function syncPanelState() {
   const collapseData = byId("collapse-data");
   const collapseProps = byId("collapse-props");
   const app = byId("app");
+  const visibleDataWidth = state.dataPanelCollapsed ? 0 : dataPanelWidth;
+  const visiblePropsWidth = state.propsPanelCollapsed ? 0 : propsPanelWidth;
 
   dataPanel?.classList.toggle("collapsed", state.dataPanelCollapsed);
   propsPanel?.classList.toggle("collapsed", state.propsPanelCollapsed);
+  if (dataPanel) {
+    dataPanel.style.width = `${visibleDataWidth}px`;
+  }
+  if (propsPanel) {
+    propsPanel.style.width = `${visiblePropsWidth}px`;
+  }
 
   if (collapseData) {
     collapseData.textContent = state.dataPanelCollapsed ? "▶" : "◀";
@@ -530,9 +564,15 @@ function syncPanelState() {
   if (collapseProps) {
     collapseProps.textContent = state.propsPanelCollapsed ? "◀" : "▶";
   }
+  if (collapseData) {
+    collapseData.textContent = state.dataPanelCollapsed ? "▶" : "◀";
+  }
+  if (collapseProps) {
+    collapseProps.textContent = state.propsPanelCollapsed ? "◀" : "▶";
+  }
   if (app) {
-    app.style.setProperty("--data-panel-width", state.dataPanelCollapsed ? "0px" : "240px");
-    app.style.setProperty("--props-panel-width", state.propsPanelCollapsed ? "0px" : "240px");
+    app.style.setProperty("--data-panel-width", `${visibleDataWidth}px`);
+    app.style.setProperty("--props-panel-width", `${visiblePropsWidth}px`);
   }
 }
 
@@ -555,6 +595,229 @@ function syncStatusBar() {
     statusMask.textContent = `⚠ ${state.maskedSites} sites masked`;
     setHidden(statusMask, state.maskedSites === 0);
   }
+}
+
+function clearElement(element) {
+  element?.replaceChildren();
+}
+
+function dataPlaceholder(message) {
+  const paragraph = document.createElement("p");
+  paragraph.className = "data-placeholder";
+  paragraph.textContent = message;
+  return paragraph;
+}
+
+function numericTraitValue(values, index) {
+  const value = Number(values?.[index] ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function createDataCell(className, text) {
+  const cell = document.createElement("div");
+  cell.className = className;
+  cell.textContent = text;
+  return cell;
+}
+
+function createTraitRow({ label, sequenceCount, sampleCount, children }) {
+  const row = document.createElement("div");
+  row.className = "trait-row";
+
+  const toggle = document.createElement("button");
+  toggle.className = "trait-toggle";
+  toggle.type = "button";
+  toggle.textContent = "+";
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.disabled = children.length === 0;
+
+  const name = createDataCell("trait-name", label);
+  const sequence = createDataCell("trait-count", `(${sequenceCount} sequences)`);
+  const sample = createDataCell("trait-count", `(${sampleCount} samples)`);
+
+  row.append(toggle, name, sequence, sample);
+
+  const childRows = children.map((child, index) => {
+    const childRow = document.createElement("div");
+    childRow.className = "trait-child-row hidden";
+    if (index % 2 === 1) {
+      childRow.classList.add("alternate");
+    }
+    childRow.append(
+      createDataCell("trait-child-spacer", ""),
+      createDataCell("trait-name", child.name),
+      createDataCell("trait-count", ""),
+      createDataCell("trait-count", String(child.count)),
+    );
+    return childRow;
+  });
+
+  toggle.addEventListener("click", () => {
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    toggle.textContent = expanded ? "+" : "-";
+    childRows.forEach((childRow) => childRow.classList.toggle("hidden", expanded));
+  });
+
+  return [row, ...childRows];
+}
+
+function buildTraitsTab(container, traits, taxa) {
+  clearElement(container);
+
+  if (!traits) {
+    container.appendChild(dataPlaceholder("No trait data in this file."));
+    return;
+  }
+
+  const labels = traits.labels?.length
+    ? traits.labels
+    : Array.from({ length: traits.ntraits ?? 0 }, (_, index) => `Trait ${index + 1}`);
+  const matrix = traits.matrix ?? {};
+  const names = taxa?.length ? taxa : Object.keys(matrix);
+
+  if (labels.length === 0) {
+    container.appendChild(dataPlaceholder("No trait data in this file."));
+    return;
+  }
+
+  const tree = document.createElement("div");
+  tree.className = "traits-tree";
+
+  const header = document.createElement("div");
+  header.className = "trait-header-row";
+  header.append(
+    createDataCell("trait-toggle-header", ""),
+    createDataCell("trait-name", "Trait name"),
+    createDataCell("trait-count", "Sequence count"),
+    createDataCell("trait-count", "Sample count"),
+  );
+  tree.appendChild(header);
+
+  labels.forEach((label, traitIndex) => {
+    const children = [];
+    let sampleCount = 0;
+
+    for (const name of names) {
+      const count = numericTraitValue(matrix[name], traitIndex);
+      if (count > 0) {
+        children.push({ name, count });
+        sampleCount += count;
+      }
+    }
+
+    tree.append(...createTraitRow({
+      label,
+      sequenceCount: children.length,
+      sampleCount,
+      children,
+    }));
+  });
+
+  container.appendChild(tree);
+}
+
+function nucleotideClass(char) {
+  switch (String(char).toUpperCase()) {
+    case "A":
+      return "nuc-a";
+    case "T":
+    case "U":
+      return "nuc-t";
+    case "G":
+      return "nuc-g";
+    case "C":
+      return "nuc-c";
+    default:
+      return "nuc-gap";
+  }
+}
+
+function buildAlignmentTab(container, characters, taxa) {
+  clearElement(container);
+
+  if (!characters?.matrix) {
+    container.appendChild(dataPlaceholder("No sequence data in this file."));
+    return;
+  }
+
+  const matrix = characters.matrix;
+  const names = taxa?.length ? taxa : Object.keys(matrix);
+
+  if (names.length === 0) {
+    container.appendChild(dataPlaceholder("No sequence data in this file."));
+    return;
+  }
+
+  const view = document.createElement("div");
+  view.className = "alignment-view";
+
+  const namesColumn = document.createElement("div");
+  namesColumn.className = "alignment-names";
+
+  const sequenceWrapper = document.createElement("div");
+  sequenceWrapper.className = "alignment-sequence-wrapper";
+  const sequencesColumn = document.createElement("div");
+  sequencesColumn.className = "alignment-sequences";
+
+  for (const name of names) {
+    if (!Object.hasOwn(matrix, name)) {
+      continue;
+    }
+
+    const nameCell = document.createElement("div");
+    nameCell.className = "alignment-name-cell";
+    nameCell.textContent = name;
+    namesColumn.appendChild(nameCell);
+
+    const sequenceCell = document.createElement("div");
+    sequenceCell.className = "alignment-sequence-cell";
+    for (const char of String(matrix[name]).toUpperCase()) {
+      const span = document.createElement("span");
+      span.className = nucleotideClass(char);
+      span.textContent = char;
+      sequenceCell.appendChild(span);
+    }
+    sequencesColumn.appendChild(sequenceCell);
+  }
+
+  sequenceWrapper.appendChild(sequencesColumn);
+  view.append(namesColumn, sequenceWrapper);
+  container.appendChild(view);
+}
+
+function activateDataTab(tabName) {
+  const traitsButton = byId("tab-traits");
+  const alignmentButton = byId("tab-alignment");
+  const traitsContent = byId("tab-content-traits");
+  const alignmentContent = byId("tab-content-alignment");
+  const showTraits = tabName === "traits";
+
+  traitsButton?.classList.toggle("active", showTraits);
+  alignmentButton?.classList.toggle("active", !showTraits);
+  setHidden(traitsContent, !showTraits);
+  setHidden(alignmentContent, showTraits);
+}
+
+export function updateDataView() {
+  const traitsContent = byId("tab-content-traits");
+  const alignmentContent = byId("tab-content-alignment");
+  if (!traitsContent || !alignmentContent) {
+    return;
+  }
+
+  clearElement(traitsContent);
+  clearElement(alignmentContent);
+
+  if (!state.parsedNexus) {
+    traitsContent.appendChild(dataPlaceholder("Open a .nex file to see data"));
+    activateDataTab("traits");
+    return;
+  }
+
+  buildTraitsTab(traitsContent, state.parsedNexus.traits, state.parsedNexus.taxa);
+  buildAlignmentTab(alignmentContent, state.parsedNexus.characters, state.parsedNexus.taxa);
+  activateDataTab("traits");
 }
 
 function createModuleWorker(relativePath) {
@@ -638,9 +901,12 @@ export async function runCurrentPipeline() {
   terminateWorkers();
   try {
     setProgress("Parsing file...", 20);
-    const text = await readFileText(state.currentFile);
-    const parsed = dependencies.parseNexus(text);
-    state.parsedNexus = parsed;
+    let parsed = state.parsedNexus;
+    if (!parsed) {
+      const text = await readFileText(state.currentFile);
+      parsed = dependencies.parseNexus(text);
+      state.parsedNexus = parsed;
+    }
 
     const { mask, masked } = dependencies.applyUndefinedSiteMask(parsed);
     state.maskedSites = masked;
@@ -715,6 +981,20 @@ async function handleNexusFileSelected(file) {
   state.lastSaved = null;
   state.saveStatus = "Unsaved changes";
   state.hasUnsavedChanges = true;
+  try {
+    const text = await readFileText(file);
+    state.parsedNexus = dependencies.parseNexus(text);
+    updateDataView();
+  } catch (error) {
+    state.parsedNexus = null;
+    clearElement(byId("tab-content-traits"));
+    clearElement(byId("tab-content-alignment"));
+    byId("tab-content-traits")?.appendChild(dataPlaceholder("Open a .nex file to see data"));
+    activateDataTab("traits");
+    showMessage(`Failed to parse file: ${error.message}`);
+    syncStatusBar();
+    return;
+  }
   showMessage("Select an algorithm and click OK to run the network");
   syncStatusBar();
 }
@@ -737,12 +1017,14 @@ function applySavedState(savedState, status = "Saved") {
     ...(savedState.visualOptions ?? savedState.visual ?? {}),
   };
   state.maskedSites = savedState.maskedSites ?? 0;
+  state.parsedNexus = savedState.parsedNexus ?? null;
   state.graph = reconstructGraph(savedState.graph);
   state.hapNet = savedState.hapNet ?? (state.graph ? { nseqs: sampledVertexCount(state.graph) } : null);
   state.lastSaved = savedState.savedAt ? new Date(savedState.savedAt) : null;
   state.saveStatus = status;
   state.hasUnsavedChanges = false;
   renderGraph();
+  updateDataView();
   syncStatusBar();
 }
 
@@ -1120,13 +1402,15 @@ function wireFileInputs() {
   const nexInput = byId("nex-file-input");
   const hapnetInput = byId("hapnet-file-input");
 
-  byId("open-nex")?.addEventListener("click", () => {
+  byId("open-nex")?.addEventListener("click", (event) => {
     closeFileMenu();
     nexInput?.click();
+    blurClickedControl(event);
   });
-  byId("open-hapnet")?.addEventListener("click", () => {
+  byId("open-hapnet")?.addEventListener("click", (event) => {
     closeFileMenu();
     loadSavedProject();
+    blurClickedControl(event);
   });
 
   nexInput?.addEventListener("change", () => {
@@ -1142,6 +1426,7 @@ function wireToolbar() {
   fileMenuButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleFileMenu();
+    blurClickedControl(event);
   });
 
   fileMenu?.addEventListener("click", (event) => {
@@ -1155,29 +1440,136 @@ function wireToolbar() {
     }
   });
 
-  byId("algorithm-menu-btn")?.addEventListener("click", openAlgorithmModal);
-  byId("save")?.addEventListener("click", () => {
+  byId("algorithm-menu-btn")?.addEventListener("click", (event) => {
+    openAlgorithmModal();
+    blurClickedControl(event);
+  });
+  byId("save")?.addEventListener("click", (event) => {
     closeFileMenu();
     save();
+    blurClickedControl(event);
   });
-  byId("save-btn")?.addEventListener("click", save);
-  byId("save-as")?.addEventListener("click", () => {
+  byId("save-btn")?.addEventListener("click", (event) => {
+    save();
+    blurClickedControl(event);
+  });
+  byId("save-as")?.addEventListener("click", (event) => {
     closeFileMenu();
     saveAsProject();
+    blurClickedControl(event);
   });
-  byId("save-as-btn")?.addEventListener("click", saveAsProject);
-  byId("export-btn")?.addEventListener("click", openExportModal);
+  byId("save-as-btn")?.addEventListener("click", (event) => {
+    saveAsProject();
+    blurClickedControl(event);
+  });
+  byId("export-btn")?.addEventListener("click", (event) => {
+    openExportModal();
+    blurClickedControl(event);
+  });
 }
 
 function wirePanels() {
-  byId("collapse-data")?.addEventListener("click", () => {
+  byId("collapse-data")?.addEventListener("click", (event) => {
     state.dataPanelCollapsed = !state.dataPanelCollapsed;
     syncPanelState();
+    blurClickedControl(event);
   });
 
-  byId("collapse-props")?.addEventListener("click", () => {
+  byId("collapse-props")?.addEventListener("click", (event) => {
     state.propsPanelCollapsed = !state.propsPanelCollapsed;
     syncPanelState();
+    blurClickedControl(event);
+  });
+}
+
+function setDataPanelWidth(width) {
+  dataPanelWidth = Math.max(MIN_PANEL_WIDTH, width);
+  const dataPanel = byId("data-panel");
+  if (dataPanel && !state.dataPanelCollapsed) {
+    dataPanel.style.width = `${dataPanelWidth}px`;
+  }
+  byId("app")?.style.setProperty(
+    "--data-panel-width",
+    state.dataPanelCollapsed ? "0px" : `${dataPanelWidth}px`,
+  );
+}
+
+function setPropsPanelWidth(width) {
+  propsPanelWidth = Math.max(MIN_PANEL_WIDTH, width);
+  const propsPanel = byId("properties-panel");
+  if (propsPanel && !state.propsPanelCollapsed) {
+    propsPanel.style.width = `${propsPanelWidth}px`;
+  }
+  byId("app")?.style.setProperty(
+    "--props-panel-width",
+    state.propsPanelCollapsed ? "0px" : `${propsPanelWidth}px`,
+  );
+}
+
+function finishPanelResize() {
+  if (!isResizingData && !isResizingProps) {
+    return;
+  }
+  isResizingData = false;
+  isResizingProps = false;
+  document.body.style.userSelect = "";
+}
+
+function wirePanelResize() {
+  byId("data-resize-handle")?.addEventListener("mousedown", (event) => {
+    const dataPanel = byId("data-panel");
+    if (!dataPanel || state.dataPanelCollapsed) {
+      return;
+    }
+
+    isResizingData = true;
+    resizeStartX = event.clientX;
+    resizeStartWidth = dataPanel.offsetWidth;
+    document.body.style.userSelect = "none";
+    blurClickedControl(event);
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  byId("props-resize-handle")?.addEventListener("mousedown", (event) => {
+    const propsPanel = byId("properties-panel");
+    if (!propsPanel || state.propsPanelCollapsed) {
+      return;
+    }
+
+    isResizingProps = true;
+    resizeStartXProps = event.clientX;
+    resizeStartWidthProps = propsPanel.offsetWidth;
+    document.body.style.userSelect = "none";
+    blurClickedControl(event);
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  document.addEventListener("mousemove", (event) => {
+    if (isResizingData) {
+      const delta = event.clientX - resizeStartX;
+      setDataPanelWidth(resizeStartWidth + delta);
+      event.preventDefault();
+    }
+    if (isResizingProps) {
+      const delta = resizeStartXProps - event.clientX;
+      setPropsPanelWidth(resizeStartWidthProps + delta);
+      event.preventDefault();
+    }
+  });
+
+  document.addEventListener("mouseup", finishPanelResize);
+}
+
+function wireDataTabs() {
+  byId("tab-traits")?.addEventListener("click", (event) => {
+    activateDataTab("traits");
+    blurClickedControl(event);
+  });
+  byId("tab-alignment")?.addEventListener("click", (event) => {
+    activateDataTab("alignment");
+    blurClickedControl(event);
   });
 }
 
@@ -1186,16 +1578,27 @@ function wireModals() {
     input.addEventListener("change", renderAlgorithmParams);
   });
 
-  byId("algorithm-ok")?.addEventListener("click", storeAlgorithmSelection);
-  byId("algorithm-cancel")?.addEventListener("click", () => {
+  byId("algorithm-ok")?.addEventListener("click", (event) => {
+    storeAlgorithmSelection();
+    blurClickedControl(event);
+  });
+  byId("algorithm-cancel")?.addEventListener("click", (event) => {
     setHidden(byId("algorithm-modal"), true);
+    blurClickedControl(event);
   });
 
   byId("export-width")?.addEventListener("input", updateExportWarning);
   byId("export-height")?.addEventListener("input", updateExportWarning);
-  byId("export-confirm")?.addEventListener("click", exportCurrentNetwork);
-  byId("export-cancel")?.addEventListener("click", () => {
+  byId("export-confirm")?.addEventListener("click", async (event) => {
+    try {
+      await exportCurrentNetwork();
+    } finally {
+      blurClickedControl(event);
+    }
+  });
+  byId("export-cancel")?.addEventListener("click", (event) => {
     setHidden(byId("export-modal"), true);
+    blurClickedControl(event);
   });
 }
 
@@ -1215,12 +1618,14 @@ function restoreDialogChoice() {
       startFreshButton.removeEventListener("click", startFresh);
       setHidden(modal, true);
     };
-    const restore = () => {
+    const restore = (event) => {
       cleanup();
+      blurClickedControl(event);
       resolve(true);
     };
-    const startFresh = () => {
+    const startFresh = (event) => {
       cleanup();
+      blurClickedControl(event);
       resolve(false);
     };
 
@@ -1261,9 +1666,18 @@ async function maybeOfferSessionRestore() {
 }
 
 function wireZoomControls() {
-  byId("zoom-in")?.addEventListener("click", zoomIn);
-  byId("zoom-out")?.addEventListener("click", zoomOut);
-  byId("zoom-fit")?.addEventListener("click", zoomFit);
+  byId("zoom-in")?.addEventListener("click", (event) => {
+    zoomIn();
+    blurClickedControl(event);
+  });
+  byId("zoom-out")?.addEventListener("click", (event) => {
+    zoomOut();
+    blurClickedControl(event);
+  });
+  byId("zoom-fit")?.addEventListener("click", (event) => {
+    zoomFit();
+    blurClickedControl(event);
+  });
 }
 
 function wireResizeObserver() {
@@ -1395,6 +1809,9 @@ function startAutoSaveTimer() {
 function wireKeyboardShortcuts() {
   document.addEventListener("keydown", (event) => {
     if (event.code === "Space" && !event.repeat) {
+      if (["BUTTON", "INPUT", "SELECT"].includes(document.activeElement?.tagName)) {
+        return;
+      }
       spacePanMode = true;
       byId("viewport")?.classList.add("pan-ready");
       return;
@@ -1456,12 +1873,17 @@ export function initNetworkView() {
   wireFileInputs();
   wireToolbar();
   wirePanels();
+  wirePanelResize();
+  wireDataTabs();
   wireModals();
   wireZoomControls();
   wireResizeObserver();
   wireViewportInteractions();
   wireKeyboardShortcuts();
-  byId("progress-cancel")?.addEventListener("click", cancelComputation);
+  byId("progress-cancel")?.addEventListener("click", (event) => {
+    cancelComputation();
+    blurClickedControl(event);
+  });
   startAutoSaveTimer();
   maybeOfferSessionRestore();
   if (app) {

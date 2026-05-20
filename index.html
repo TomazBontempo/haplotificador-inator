@@ -78,8 +78,16 @@
       <aside id="data-panel">
         <button id="collapse-data" type="button">◀</button>
         <div id="data-content">
-          <h2>Data View</h2>
+          <div id="data-tabs">
+            <button id="tab-traits" class="tab-btn active" type="button">Traits</button>
+            <button id="tab-alignment" class="tab-btn" type="button">Alignment</button>
+          </div>
+          <div id="tab-content-traits" class="tab-content">
+            <p class="data-placeholder">Open a .nex file to see data</p>
+          </div>
+          <div id="tab-content-alignment" class="tab-content hidden"></div>
         </div>
+        <div id="data-resize-handle" class="resize-handle"></div>
       </aside>
       <main id="viewport">
         <div id="svg-container">
@@ -93,6 +101,7 @@
       </main>
       <aside id="properties-panel">
         <button id="collapse-props" type="button">▶</button>
+        <div id="props-resize-handle" class="resize-handle"></div>
         <div id="props-content">
           <p>Select a node or edge to see properties</p>
         </div>
