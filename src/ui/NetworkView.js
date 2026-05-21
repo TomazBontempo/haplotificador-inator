@@ -40,6 +40,7 @@ let rubberBandStart = null;
 let rubberBandRect = null;
 let svgContainerResizeObserver = null;
 let pendingVertexGesture = null;
+let movedVertexIndices = new Set();
 let suppressNextSvgClick = false;
 let isResizingData = false;
 let isResizingProps = false;
@@ -98,6 +99,7 @@ function resetState() {
   Object.assign(state, next);
   dataPanelWidth = DEFAULT_PANEL_WIDTH;
   propsPanelWidth = DEFAULT_PANEL_WIDTH;
+  movedVertexIndices.clear();
 }
 
 function appShell() {
@@ -415,9 +417,8 @@ export async function save() {
 
   if (state.saveHandle) {
     await storage.saveToHandle(state.saveHandle, saveState);
-  } else {
-    await storage.autoSave(saveState);
   }
+  await storage.autoSave(saveState);
 
   state.lastSaved = new Date();
   state.saveStatus = "Saved";
@@ -431,6 +432,7 @@ export async function saveAsProject() {
 
   if (fileHandle) {
     state.saveHandle = fileHandle;
+    await storage.autoSave(buildSaveState());
     state.lastSaved = new Date();
     state.saveStatus = "Saved";
     state.hasUnsavedChanges = false;
@@ -870,7 +872,7 @@ function renderGraph() {
 }
 
 async function autoSaveCurrentState(status = "Auto-saved") {
-  if (!state.graph || !state.hasUnsavedChanges) {
+  if (!state.graph) {
     return;
   }
 
@@ -1181,10 +1183,47 @@ function updateEdgeElement(edge) {
   }
 }
 
+function vertexByIndex(index) {
+  return state.graph?.vertices?.find((vertex) => vertex.index === index) ?? null;
+}
+
+function svgTranslateCoordinates(element) {
+  const transform = element.getAttribute("transform") ?? "";
+  const match = transform.match(/translate\(\s*([-+.\deE]+)(?:[\s,]+([-+.\deE]+))?\s*\)/);
+  if (!match) {
+    return null;
+  }
+
+  const x = Number(match[1]);
+  const y = Number(match[2] ?? 0);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+
+  return { x, y };
+}
+
+function commitMovedVertexPositions() {
+  for (const index of movedVertexIndices) {
+    const element = currentSvg()?.querySelector(`.vertex[data-index="${index}"]`);
+    const vertex = vertexByIndex(index);
+    const coordinates = element ? svgTranslateCoordinates(element) : null;
+    if (!vertex || !coordinates) {
+      continue;
+    }
+
+    vertex.x = coordinates.x;
+    vertex.y = coordinates.y;
+  }
+
+  movedVertexIndices.clear();
+}
+
 function moveSelectedVertices(dx, dy) {
   const movedEdges = new Set();
   for (const element of selectedVertexElements()) {
-    const vertex = state.graph?.vertices[Number(element.dataset.index)];
+    const index = Number(element.dataset.index);
+    const vertex = vertexByIndex(index);
     if (!vertex) {
       continue;
     }
@@ -1192,6 +1231,7 @@ function moveSelectedVertices(dx, dy) {
     vertex.x = (vertex.x ?? 0) + dx;
     vertex.y = (vertex.y ?? 0) + dy;
     element.setAttribute("transform", `translate(${vertex.x}, ${vertex.y})`);
+    movedVertexIndices.add(index);
     for (const edge of vertex.incidentEdges ?? []) {
       movedEdges.add(edge);
     }
@@ -1770,9 +1810,11 @@ function wireViewportInteractions() {
   document.addEventListener("mouseup", () => {
     if (pendingVertexGesture) {
       if (isDraggingNodes) {
+        commitMovedVertexPositions();
         markUnsavedChanges();
         suppressUpcomingSvgClick();
       } else {
+        movedVertexIndices.clear();
         selectGraphElement(pendingVertexGesture.element, pendingVertexGesture.shiftKey);
         suppressUpcomingSvgClick();
       }
@@ -1800,7 +1842,7 @@ function startAutoSaveTimer() {
   }
 
   autoSaveTimer = window.setInterval(() => {
-    if (state.graph && state.hasUnsavedChanges) {
+    if (state.graph) {
       autoSaveCurrentState("Auto-saved");
     }
   }, AUTO_SAVE_INTERVAL);
