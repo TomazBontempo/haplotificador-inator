@@ -252,10 +252,10 @@ so the agent understands the intended behavior before implementing.
   - [x] Implement PDF export in Exporter.js.
 
 - [ ] 12 - UI
-  - [ ] 12a - Core UI Scaffold
-    - [ ] Implement NetworkView.js connecting all modules.
-    - [ ] Implement Web Workers for algorithms and layout.
-    - [ ] Validate the full pipeline end-to-end with a real .nex file.
+  - [x] 12a - Core UI Scaffold
+    - [x] Implement NetworkView.js connecting all modules.
+    - [x] Implement Web Workers for algorithms and layout.
+    - [x] Validate the full pipeline end-to-end with a real .nex file.
 
   - [ ] 12b - File Management
     - [ ] Implement project file loading flows (.nex and .hapnet) with correct warnings.

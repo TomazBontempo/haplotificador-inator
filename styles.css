@@ -563,3 +563,33 @@ progress.indeterminate {
 #toolbar .modal-dialog button:focus-visible {
   background: #eeeeee;
 }
+
+.sitemask-dialog {
+  max-width: 520px;
+  padding: 20px 24px;
+  text-align: center;
+}
+
+.sitemask-dialog p {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.sitemask-dialog .modal-actions {
+  justify-content: center;
+}
+
+#toolbar #sitemask-ok {
+  background: #f0a500;
+  color: white;
+  border: none;
+  padding: 8px 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#toolbar #sitemask-ok:hover {
+  background: #d4920a;
+}

@@ -170,6 +170,16 @@ function appShell() {
             </div>
           </div>
         </div>
+        <div id="sitemask-modal" class="hidden">
+          <div class="modal-overlay">
+            <div class="modal-dialog sitemask-dialog">
+              <p>More than 5% of sites contain undefined states and will be masked.<br>Sequences with high undefined states will not be removed.</p>
+              <div class="modal-actions">
+                <button id="sitemask-ok">OK</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </nav>
       <div id="main">
         <aside id="data-panel">
@@ -599,6 +609,29 @@ function syncStatusBar() {
   }
 }
 
+function showSiteMaskWarning() {
+  return new Promise((resolve) => {
+    const modal = byId("sitemask-modal");
+    const okButton = byId("sitemask-ok");
+
+    if (!modal || !okButton) {
+      resolve();
+      return;
+    }
+
+    const acknowledge = (event) => {
+      okButton.removeEventListener("click", acknowledge);
+      setHidden(modal, true);
+      blurClickedControl(event);
+      resolve();
+    };
+
+    okButton.addEventListener("click", acknowledge);
+    setHidden(modal, false);
+    okButton.focus();
+  });
+}
+
 function clearElement(element) {
   element?.replaceChildren();
 }
@@ -985,7 +1018,14 @@ async function handleNexusFileSelected(file) {
   state.hasUnsavedChanges = true;
   try {
     const text = await readFileText(file);
-    state.parsedNexus = dependencies.parseNexus(text);
+    const parsed = dependencies.parseNexus(text);
+    state.parsedNexus = parsed;
+    const { masked } = dependencies.applyUndefinedSiteMask(parsed);
+    state.maskedSites = masked;
+    syncStatusBar();
+    if (masked > 0) {
+      await showSiteMaskWarning();
+    }
     updateDataView();
   } catch (error) {
     state.parsedNexus = null;
