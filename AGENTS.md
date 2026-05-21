@@ -257,11 +257,11 @@ so the agent understands the intended behavior before implementing.
     - [x] Implement Web Workers for algorithms and layout.
     - [x] Validate the full pipeline end-to-end with a real .nex file.
 
-  - [ ] 12b - File Management
-    - [ ] Implement project file loading flows (.nex and .hapnet) with correct warnings.
-    - [ ] Implement SiteMask warning when sites are masked on file load.
-    - [ ] Implement auto-save timer and configurable interval.
-    - [ ] Implement Save and Save As — keyboard shortcuts (Ctrl+S / Ctrl+Shift+S),
+  - [x] 12b - File Management
+    - [x] Implement project file loading flows (.nex and .hapnet) with correct warnings.
+    - [x] Implement SiteMask warning when sites are masked on file load.
+    - [x] Implement auto-save timer and configurable interval.
+    - [x] Implement Save and Save As — keyboard shortcuts (Ctrl+S / Ctrl+Shift+S),
           toolbar icon, and File menu dropdown options.
 
   - [ ] 12c - Visual Controls

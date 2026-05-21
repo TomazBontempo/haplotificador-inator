@@ -110,8 +110,7 @@ function appShell() {
         <div class="menu-wrapper">
           <button id="file-menu-btn" type="button">File</button>
           <div id="file-menu" class="dropdown-menu hidden">
-            <button id="open-nex" type="button">Open .nex file</button>
-            <button id="open-hapnet" type="button">Open .hapnet file</button>
+            <button id="open-file" type="button">Open</button>
             <hr>
             <button id="save" type="button">Save&nbsp;&nbsp;Ctrl+S</button>
             <button id="save-as" type="button">Save As&nbsp;&nbsp;Ctrl+Shift+S</button>
@@ -121,8 +120,7 @@ function appShell() {
         <button id="save-btn" type="button" title="Save (Ctrl+S)">💾</button>
         <button id="save-as-btn" type="button" title="Save As (Ctrl+Shift+S)">💾+</button>
         <button id="export-btn" type="button">Export</button>
-        <input id="nex-file-input" class="hidden" type="file" accept=".nex,.nexus">
-        <input id="hapnet-file-input" class="hidden" type="file" accept=".hapnet">
+        <input id="open-file-input" class="hidden" type="file" accept=".nex,.hapnet">
         <div id="algorithm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="algorithm-title">
           <div class="modal-dialog">
             <h2 id="algorithm-title">Algorithm</h2>
@@ -1133,6 +1131,37 @@ async function handleNexusFileSelected(file) {
   syncStatusBar();
 }
 
+async function handleSavedProjectFileSelected(file) {
+  if (!file) {
+    return;
+  }
+
+  try {
+    const savedState = JSON.parse(await readFileText(file));
+    applySavedState(savedState, savedState.savedAt ? "Saved" : null);
+  } catch (error) {
+    showMessage(`Failed to load project: ${error.message}`);
+  }
+}
+
+function handleOpenFileSelected(file) {
+  if (!file) {
+    return;
+  }
+
+  const filename = file.name.toLowerCase();
+  if (filename.endsWith(".nex")) {
+    handleNexusFileSelected(file);
+    return;
+  }
+  if (filename.endsWith(".hapnet")) {
+    handleSavedProjectFileSelected(file);
+    return;
+  }
+
+  showMessage("Unsupported file format. Please open a .nex or .hapnet file.");
+}
+
 function sampledVertexCount(graph) {
   return graph?.vertices?.filter((vertex) => vertex.info?.sampled !== false).length ?? 0;
 }
@@ -1567,10 +1596,9 @@ async function exportCurrentNetwork() {
 }
 
 function wireFileInputs() {
-  const nexInput = byId("nex-file-input");
-  const hapnetInput = byId("hapnet-file-input");
+  const openInput = byId("open-file-input");
 
-  byId("open-nex")?.addEventListener("click", async (event) => {
+  byId("open-file")?.addEventListener("click", async (event) => {
     closeFileMenu();
     blurClickedControl(event);
 
@@ -1585,21 +1613,15 @@ function wireFileInputs() {
       return;
     }
 
-    if (nexInput) {
-      nexInput.value = "";
+    if (openInput) {
+      openInput.value = "";
     }
-    nexInput?.click();
-  });
-  byId("open-hapnet")?.addEventListener("click", (event) => {
-    closeFileMenu();
-    loadSavedProject();
-    blurClickedControl(event);
+    openInput?.click();
   });
 
-  nexInput?.addEventListener("change", () => {
-    handleNexusFileSelected(nexInput.files?.[0] ?? null);
+  openInput?.addEventListener("change", () => {
+    handleOpenFileSelected(openInput.files?.[0] ?? null);
   });
-  hapnetInput?.addEventListener("change", () => {});
 }
 
 function wireToolbar() {
