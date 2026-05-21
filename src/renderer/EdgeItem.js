@@ -22,6 +22,7 @@ export function renderEdgeItem(edge, options = {}) {
   const edgeColor = edgeOptions.color ?? DEFAULT_EDGE_COLOR;
   const edgeWidth = numericValue(edgeOptions.width, DEFAULT_EDGE_WIDTH);
   const labelColor = edgeOptions.labelColor ?? DEFAULT_LABEL_COLOR;
+  const fontSize = Math.max(8, numericValue(options.fontSize, 12) - 2);
   const weight = numericValue(edge.weight ?? edge.info?.weight, 1);
   const fromX = numericValue(edge.from?.x, 0);
   const fromY = numericValue(edge.from?.y, 0);
@@ -77,7 +78,7 @@ export function renderEdgeItem(edge, options = {}) {
     label.setAttribute("y", String(midY + perpY * LABEL_OFFSET));
     label.setAttribute("text-anchor", "middle");
     label.setAttribute("dominant-baseline", "middle");
-    label.setAttribute("font-size", "10");
+    label.setAttribute("font-size", String(fontSize));
     label.setAttribute("fill", labelColor);
     label.setAttribute("pointer-events", "none");
     label.setAttribute("class", "edge-label");

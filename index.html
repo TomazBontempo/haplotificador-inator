@@ -119,26 +119,69 @@
         </div>
       </main>
       <aside id="properties-panel">
-        <button id="collapse-props" type="button">▶</button>
-        <div id="props-resize-handle" class="resize-handle"></div>
+        <button id="collapse-props">▶</button>
         <div id="props-content">
-          <h2>Visuals</h2>
           <div id="visuals-panel-content">
+
             <div class="visuals-section">
-              <h4>Edge mutations</h4>
+              <h4>Font</h4>
               <div class="visuals-row">
-                <label>
-                  <input type="radio" name="edge-display" value="labels" checked>
-                  Labels
-                </label>
-                <label>
-                  <input type="radio" name="edge-display" value="ticks">
-                  Tick marks
-                </label>
+                <label>Size</label>
+                <div class="slider-with-value">
+                  <input type="range" id="visual-font-size"
+                    min="8" max="24" step="1" value="12">
+                  <span id="visual-font-size-value">12px</span>
+                </div>
               </div>
             </div>
+
+            <div class="visuals-section">
+              <h4>Edges</h4>
+              <div class="visuals-row">
+                <label>Color</label>
+                <input type="color" id="visual-edge-color" value="#666666">
+              </div>
+              <div class="visuals-row">
+                <label>Width</label>
+                <div class="slider-with-value">
+                  <input type="range" id="visual-edge-width"
+                    min="0.5" max="5" step="0.5" value="1.5">
+                  <span id="visual-edge-width-value">1.5px</span>
+                </div>
+              </div>
+              <div class="visuals-row">
+                <label>Mutations</label>
+                <div class="radio-group-inline">
+                  <label>
+                    <input type="radio" name="edge-display"
+                      value="labels" checked> Numbers
+                  </label>
+                  <label>
+                    <input type="radio" name="edge-display"
+                      value="ticks"> Marks
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="visuals-section">
+              <h4>Inferred nodes</h4>
+              <div class="visuals-row">
+                <label>Color</label>
+                <input type="color" id="visual-inferred-color" value="#333333">
+              </div>
+            </div>
+
+            <div class="visuals-section">
+              <h4>Traits</h4>
+              <div id="visual-traits-list">
+                <p class="visuals-placeholder">
+                  Run an algorithm to see trait colors.
+                </p>
+              </div>
+            </div>
+
           </div>
-          <div id="selection-details"></div>
         </div>
       </aside>
     </div>

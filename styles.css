@@ -96,44 +96,124 @@ body {
   overflow: hidden;
 }
 
-#props-content h2 {
-  margin: 0 0 16px;
-  font-size: 16px;
+#props-content {
+  overflow-y: auto;
+  height: 100%;
+  padding: 0;
 }
 
 .visuals-section {
-  padding-bottom: 16px;
-  border-bottom: 1px solid #d8d8d8;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .visuals-section h4 {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #888;
+  letter-spacing: 0.5px;
 }
 
 .visuals-row {
-  display: grid;
-  gap: 8px;
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.visuals-row:last-child {
+  margin-bottom: 0;
 }
 
 .visuals-row label {
+  font-size: 12px;
+  color: #444;
+  flex-shrink: 0;
+}
+
+.visuals-row input[type="color"] {
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.visuals-row input[type="number"] {
+  width: 60px;
+  padding: 3px 6px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.radio-group-inline {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.radio-group-inline label {
+  font-size: 12px;
+  color: #444;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  cursor: pointer;
 }
 
-#selection-details {
-  margin-top: 16px;
-  font-size: 13px;
+.slider-with-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-#selection-details h2 {
-  margin-bottom: 8px;
+.slider-with-value input[type="range"] {
+  width: 100px;
 }
 
-#selection-details p {
-  margin: 6px 0;
+.slider-with-value span {
+  font-size: 11px;
+  color: #666;
+  min-width: 28px;
+  text-align: right;
+}
+
+.trait-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.trait-color-row label {
+  font-size: 12px;
+  color: #444;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.trait-color-row input[type="color"] {
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.visuals-placeholder {
+  font-size: 11px;
+  color: #aaa;
+  font-style: italic;
+  margin: 0;
 }
 
 #data-panel.collapsed #data-content,
@@ -187,10 +267,6 @@ body {
 
 #data-resize-handle {
   right: 0;
-}
-
-#props-resize-handle {
-  left: 0;
 }
 
 #data-tabs {

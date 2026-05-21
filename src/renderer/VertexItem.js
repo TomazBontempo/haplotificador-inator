@@ -110,7 +110,7 @@ function sectorPath(radius, startAngle, endAngle) {
   ].join(" ");
 }
 
-function appendLabel(group, vertex, radius, fill) {
+function appendLabel(group, vertex, radius, fill, fontSize) {
   const label = vertex.label ?? vertex.name ?? "";
   if (!label) {
     return;
@@ -119,9 +119,9 @@ function appendLabel(group, vertex, radius, fill) {
   const text = createSvgElement("text");
   text.textContent = label;
   text.setAttribute("x", "0");
-  text.setAttribute("y", String(radius + 14));
+  text.setAttribute("y", String(radius + fontSize + 4));
   text.setAttribute("text-anchor", "middle");
-  text.setAttribute("font-size", "12px");
+  text.setAttribute("font-size", `${fontSize}px`);
   text.setAttribute("fill", fill);
   text.setAttribute("class", "vertex-label");
   group.appendChild(text);
@@ -135,6 +135,7 @@ export function renderVertexItem(vertex, options = {}) {
   const traitColors = vertexOptions.traitColors ?? [];
   const stroke = vertexOptions.strokeColor ?? DEFAULT_STROKE;
   const labelFill = vertexOptions.labelColor ?? DEFAULT_LABEL_FILL;
+  const fontSize = numericValue(options.fontSize, 12);
   const group = createSvgElement("g");
   const x = numericValue(vertex.x, 0);
   const y = numericValue(vertex.y, 0);
@@ -167,7 +168,7 @@ export function renderVertexItem(vertex, options = {}) {
     appendSampledCircle(group, radius, defaultFill, stroke);
   }
 
-  appendLabel(group, vertex, radius, labelFill);
+  appendLabel(group, vertex, radius, labelFill, fontSize);
 
   return group;
 }

@@ -151,11 +151,26 @@ function backgroundColor(visualOptions) {
 }
 
 function addSvgBackground(svg, fill) {
+  const existing = svg.firstElementChild?.classList?.contains("svg-background")
+    ? svg.firstElementChild
+    : null;
+  if (existing) {
+    existing.setAttribute("fill", fill);
+    return;
+  }
+
   const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  rect.setAttribute("class", "svg-background");
   rect.setAttribute("width", "100%");
   rect.setAttribute("height", "100%");
   rect.setAttribute("fill", fill);
   svg.insertBefore(rect, svg.firstChild);
+}
+
+function removeSvgBackground(svg) {
+  if (svg.firstElementChild?.classList?.contains("svg-background")) {
+    svg.firstElementChild.remove();
+  }
 }
 
 function serializeSvg(svg) {
@@ -178,6 +193,9 @@ function renderExportSvg(graph, visualOptions, exportOptions) {
 
   svg.setAttribute("width", String(normalizedExportOptions.width));
   svg.setAttribute("height", String(normalizedExportOptions.height));
+  if (normalizedExportOptions.transparent) {
+    removeSvgBackground(svg);
+  }
 
   return { svg, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions };
 }

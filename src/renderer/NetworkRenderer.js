@@ -24,6 +24,7 @@ const DEFAULT_OPTIONS = Object.freeze({
     labelColor: "#333333",
   },
   baseRadius: 10,
+  fontSize: 12,
   zoom: 1,
   panX: 0,
   panY: 0,

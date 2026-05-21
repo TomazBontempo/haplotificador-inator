@@ -45,12 +45,9 @@ let pendingVertexGesture = null;
 let movedVertexIndices = new Set();
 let suppressNextSvgClick = false;
 let isResizingData = false;
-let isResizingProps = false;
 let panChanged = false;
 let resizeStartX = 0;
-let resizeStartXProps = 0;
 let resizeStartWidth = DEFAULT_PANEL_WIDTH;
-let resizeStartWidthProps = DEFAULT_PANEL_WIDTH;
 let dataPanelWidth = DEFAULT_PANEL_WIDTH;
 let propsPanelWidth = DEFAULT_PANEL_WIDTH;
 
@@ -83,6 +80,7 @@ function createInitialState() {
       },
       vertices: { defaultColor: "#999999", inferredColor: "#333333", traitColors: [] },
       baseRadius: 10,
+      fontSize: 12,
       zoom: 1,
       panX: 0,
       panY: 0,
@@ -111,37 +109,74 @@ function resetState() {
   movedVertexIndices.clear();
 }
 
-function edgeDisplayMode() {
-  return state.visualOptions.edges?.displayMode === "ticks" ? "ticks" : "labels";
-}
-
-function visualsPanelMarkup(selectionMarkup = "") {
-  const displayMode = edgeDisplayMode();
+function visualsPanelMarkup() {
   return `
-    <h2>Visuals</h2>
     <div id="visuals-panel-content">
       <div class="visuals-section">
-        <h4>Edge mutations</h4>
+        <h4>Font</h4>
         <div class="visuals-row">
-          <label>
-            <input type="radio" name="edge-display" value="labels" ${displayMode === "labels" ? "checked" : ""}>
-            Labels
-          </label>
-          <label>
-            <input type="radio" name="edge-display" value="ticks" ${displayMode === "ticks" ? "checked" : ""}>
-            Tick marks
-          </label>
+          <label>Size</label>
+          <div class="slider-with-value">
+            <input type="range" id="visual-font-size"
+              min="8" max="24" step="1" value="12">
+            <span id="visual-font-size-value">12px</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="visuals-section">
+        <h4>Edges</h4>
+        <div class="visuals-row">
+          <label>Color</label>
+          <input type="color" id="visual-edge-color" value="#666666">
+        </div>
+        <div class="visuals-row">
+          <label>Width</label>
+          <div class="slider-with-value">
+            <input type="range" id="visual-edge-width"
+              min="0.5" max="5" step="0.5" value="1.5">
+            <span id="visual-edge-width-value">1.5px</span>
+          </div>
+        </div>
+        <div class="visuals-row">
+          <label>Mutations</label>
+          <div class="radio-group-inline">
+            <label>
+              <input type="radio" name="edge-display"
+                value="labels" checked> Numbers
+            </label>
+            <label>
+              <input type="radio" name="edge-display"
+                value="ticks"> Marks
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="visuals-section">
+        <h4>Inferred nodes</h4>
+        <div class="visuals-row">
+          <label>Color</label>
+          <input type="color" id="visual-inferred-color" value="#333333">
+        </div>
+      </div>
+
+      <div class="visuals-section">
+        <h4>Traits</h4>
+        <div id="visual-traits-list">
+          <p class="visuals-placeholder">
+            Run an algorithm to see trait colors.
+          </p>
         </div>
       </div>
     </div>
-    <div id="selection-details">${selectionMarkup}</div>
   `;
 }
 
-function renderVisualsPanel(selectionMarkup = "") {
+function renderVisualsPanel() {
   const propsContent = byId("props-content");
   if (propsContent) {
-    propsContent.innerHTML = visualsPanelMarkup(selectionMarkup);
+    propsContent.innerHTML = visualsPanelMarkup();
   }
 }
 
@@ -259,8 +294,7 @@ function appShell() {
           </div>
         </main>
         <aside id="properties-panel">
-          <button id="collapse-props" type="button">▶</button>
-          <div id="props-resize-handle" class="resize-handle"></div>
+          <button id="collapse-props">▶</button>
           <div id="props-content">
             ${visualsPanelMarkup()}
           </div>
@@ -451,7 +485,10 @@ export function buildSaveState() {
     visual: JSON.parse(JSON.stringify(state.visualOptions)),
     visualOptions: JSON.parse(JSON.stringify(state.visualOptions)),
     maskedSites: state.maskedSites,
-    hapNet: state.hapNet ? { nseqs: state.hapNet.nseqs } : null,
+    hapNet: state.hapNet ? {
+      nseqs: state.hapNet.nseqs,
+      traitNames: [...(state.hapNet.traitNames ?? [])],
+    } : null,
   };
 }
 
@@ -1021,6 +1058,10 @@ function workerResult(worker, payload) {
 }
 
 function renderGraph() {
+  return rerenderNetwork();
+}
+
+function rerenderNetwork() {
   if (!state.graph) {
     return null;
   }
@@ -1117,6 +1158,157 @@ function markVisualChange() {
   }
 }
 
+function edgeDisplayMode() {
+  return state.visualOptions.edges?.displayMode === "ticks" ? "ticks" : "labels";
+}
+
+function updateTraitColorPickers() {
+  const list = byId("visual-traits-list");
+  if (!list) {
+    return;
+  }
+
+  list.replaceChildren();
+  const traitNames = state.hapNet?.traitNames ?? [];
+  const traitColors = state.visualOptions.vertices?.traitColors ?? [];
+
+  if (traitNames.length === 0) {
+    const placeholder = document.createElement("p");
+    placeholder.className = "visuals-placeholder";
+    placeholder.textContent = "Run an algorithm to see trait colors.";
+    list.appendChild(placeholder);
+    return;
+  }
+
+  traitNames.forEach((traitName, index) => {
+    const row = document.createElement("div");
+    row.className = "trait-color-row";
+
+    const label = document.createElement("label");
+    label.textContent = traitName;
+    label.htmlFor = `visual-trait-color-${index}`;
+
+    const input = document.createElement("input");
+    input.type = "color";
+    input.id = `visual-trait-color-${index}`;
+    input.value = traitColors[index] ?? colorForTraitIndex(index, traitNames.length);
+    if (!traitColors[index]) {
+      state.visualOptions.vertices.traitColors[index] = input.value;
+    }
+    input.addEventListener("input", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      state.visualOptions.vertices.traitColors[index] = target.value;
+      markVisualChange();
+      rerenderNetwork();
+    });
+
+    row.append(label, input);
+    list.appendChild(row);
+  });
+}
+
+function syncVisualsPanel() {
+  const visualOptions = state.visualOptions;
+  const edgeColor = byId("visual-edge-color");
+  const edgeWidth = byId("visual-edge-width");
+  const edgeWidthValue = byId("visual-edge-width-value");
+  const inferredColor = byId("visual-inferred-color");
+  const fontSize = byId("visual-font-size");
+  const fontSizeValue = byId("visual-font-size-value");
+
+  if (edgeColor instanceof HTMLInputElement) {
+    edgeColor.value = visualOptions.edges?.color ?? "#666666";
+  }
+  if (edgeWidth instanceof HTMLInputElement) {
+    edgeWidth.value = String(visualOptions.edges?.width ?? 1.5);
+  }
+  if (edgeWidthValue) {
+    edgeWidthValue.textContent = `${visualOptions.edges?.width ?? 1.5}px`;
+  }
+  const displayMode = edgeDisplayMode();
+  document.querySelectorAll('input[name="edge-display"]').forEach((input) => {
+    if (input instanceof HTMLInputElement) {
+      input.checked = input.value === displayMode;
+    }
+  });
+  if (inferredColor instanceof HTMLInputElement) {
+    inferredColor.value = visualOptions.vertices?.inferredColor ?? "#333333";
+  }
+  if (fontSize instanceof HTMLInputElement) {
+    fontSize.value = String(visualOptions.fontSize ?? 12);
+  }
+  if (fontSizeValue) {
+    fontSizeValue.textContent = `${visualOptions.fontSize ?? 12}px`;
+  }
+
+  updateTraitColorPickers();
+}
+
+function initVisualsPanel() {
+  byId("visual-edge-color")?.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    state.visualOptions.edges.color = target.value;
+    markVisualChange();
+    rerenderNetwork();
+  });
+
+  byId("visual-edge-width")?.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    state.visualOptions.edges.width = Number.parseFloat(target.value);
+    const value = byId("visual-edge-width-value");
+    if (value) {
+      value.textContent = `${state.visualOptions.edges.width}px`;
+    }
+    markVisualChange();
+    rerenderNetwork();
+  });
+
+  document.querySelectorAll('input[name="edge-display"]').forEach((input) => {
+    input.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      state.visualOptions.edges.displayMode = target.value;
+      markVisualChange();
+      rerenderNetwork();
+    });
+  });
+
+  byId("visual-inferred-color")?.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    state.visualOptions.vertices.inferredColor = target.value;
+    markVisualChange();
+    rerenderNetwork();
+  });
+
+  byId("visual-font-size")?.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    state.visualOptions.fontSize = Number.parseInt(target.value, 10);
+    const value = byId("visual-font-size-value");
+    if (value) {
+      value.textContent = `${state.visualOptions.fontSize}px`;
+    }
+    markVisualChange();
+    rerenderNetwork();
+  });
+}
+
 function setEdgeDisplayMode(displayMode) {
   if (!["labels", "ticks"].includes(displayMode) || displayMode === edgeDisplayMode()) {
     return;
@@ -1128,9 +1320,9 @@ function setEdgeDisplayMode(displayMode) {
   };
   markVisualChange();
   if (state.graph) {
-    renderGraph();
+    rerenderNetwork();
   }
-  renderVisualsPanel();
+  syncVisualsPanel();
 }
 
 export async function runCurrentPipeline() {
@@ -1181,6 +1373,7 @@ export async function runCurrentPipeline() {
     state.visualOptions.width = 1000;
     state.visualOptions.height = 1000;
     assignTraitColors(state.hapNet);
+    updateTraitColorPickers();
     setProgress("Rendering network...", 90);
     renderGraph();
     setProgress("Rendering network...", 100);
@@ -1215,6 +1408,7 @@ async function handleNexusFileSelected(file) {
   state.hapNet = null;
   state.graph = null;
   state.visualOptions.vertices.traitColors = [];
+  syncVisualsPanel();
   state.maskedSites = 0;
   state.saveHandle = null;
   state.lastSaved = null;
@@ -1280,6 +1474,25 @@ function sampledVertexCount(graph) {
   return graph?.vertices?.filter((vertex) => vertex.info?.sampled !== false).length ?? 0;
 }
 
+function savedHapNetSummary(savedState) {
+  const traitNames = savedState.hapNet?.traitNames
+    ?? savedState.parsedNexus?.traits?.labels
+    ?? [];
+  if (savedState.hapNet) {
+    return {
+      ...savedState.hapNet,
+      traitNames: [...traitNames],
+    };
+  }
+  if (savedState.graph) {
+    return {
+      nseqs: sampledVertexCount(state.graph),
+      traitNames: [...traitNames],
+    };
+  }
+  return null;
+}
+
 function mergeVisualOptions(savedVisualOptions = {}) {
   return {
     ...state.visualOptions,
@@ -1312,10 +1525,11 @@ function applySavedState(savedState, status = "Saved") {
   state.maskedSites = savedState.maskedSites ?? 0;
   state.parsedNexus = savedState.parsedNexus ?? null;
   state.graph = reconstructGraph(savedState.graph);
-  state.hapNet = savedState.hapNet ?? (state.graph ? { nseqs: sampledVertexCount(state.graph) } : null);
+  state.hapNet = savedHapNetSummary(savedState);
   state.lastSaved = savedState.savedAt ? new Date(savedState.savedAt) : null;
   state.saveStatus = status;
   state.hasUnsavedChanges = false;
+  syncVisualsPanel();
   renderGraph();
   updateDataView();
   syncStatusBar();
@@ -1400,35 +1614,15 @@ function clearSelection() {
     element.classList.remove("selected");
   });
   state.selectedElements = [];
-  renderVisualsPanel();
+  syncVisualsPanel();
 }
 
 function selectedVertexElements() {
   return state.selectedElements.filter((element) => element.classList?.contains("vertex"));
 }
 
-function updatePropertiesPanel(element) {
-  const propsContent = byId("props-content");
-  if (!propsContent) {
-    return;
-  }
-
-  if (element.classList.contains("vertex")) {
-    const vertex = state.graph?.vertices[Number(element.dataset.index)];
-    const info = vertex?.info ?? {};
-    const traits = Array.isArray(info.traits) ? info.traits : [];
-    renderVisualsPanel(`
-      <h2>${info.name ?? vertex?.label ?? "Vertex"}</h2>
-      <p>Frequency: ${info.frequency ?? 0}</p>
-      <p>Traits: ${traits.length ? traits.join(", ") : "—"}</p>
-    `);
-  } else if (element.classList.contains("edge")) {
-    const edge = state.graph?.edges[Number(element.dataset.index)];
-    renderVisualsPanel(`
-      <h2>Edge</h2>
-      <p>Weight: ${edge?.weight ?? edge?.info?.weight ?? "—"}</p>
-    `);
-  }
+function updatePropertiesPanel() {
+  syncVisualsPanel();
 }
 
 function selectGraphElement(element, additive = false) {
@@ -1803,15 +1997,6 @@ function wirePanels() {
     syncPanelState();
     blurClickedControl(event);
   });
-
-  byId("props-content")?.addEventListener("change", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement) || target.name !== "edge-display") {
-      return;
-    }
-    setEdgeDisplayMode(target.value);
-    blurClickedControl(event);
-  });
 }
 
 function setDataPanelWidth(width) {
@@ -1839,11 +2024,10 @@ function setPropsPanelWidth(width) {
 }
 
 function finishPanelResize() {
-  if (!isResizingData && !isResizingProps) {
+  if (!isResizingData) {
     return;
   }
   isResizingData = false;
-  isResizingProps = false;
   document.body.style.userSelect = "";
 }
 
@@ -1863,30 +2047,10 @@ function wirePanelResize() {
     event.stopPropagation();
   });
 
-  byId("props-resize-handle")?.addEventListener("mousedown", (event) => {
-    const propsPanel = byId("properties-panel");
-    if (!propsPanel || state.propsPanelCollapsed) {
-      return;
-    }
-
-    isResizingProps = true;
-    resizeStartXProps = event.clientX;
-    resizeStartWidthProps = propsPanel.offsetWidth;
-    document.body.style.userSelect = "none";
-    blurClickedControl(event);
-    event.preventDefault();
-    event.stopPropagation();
-  });
-
   document.addEventListener("mousemove", (event) => {
     if (isResizingData) {
       const delta = event.clientX - resizeStartX;
       setDataPanelWidth(resizeStartWidth + delta);
-      event.preventDefault();
-    }
-    if (isResizingProps) {
-      const delta = resizeStartXProps - event.clientX;
-      setPropsPanelWidth(resizeStartWidthProps + delta);
       event.preventDefault();
     }
   });
@@ -2204,16 +2368,21 @@ export function initNetworkView() {
   resetState();
   syncPanelState();
   syncStatusBar();
-  renderVisualsPanel();
-  renderAlgorithmParams();
 
   if (app?.dataset.networkViewInitialized === "true") {
+    syncVisualsPanel();
+    renderAlgorithmParams();
     return state;
   }
+
+  renderVisualsPanel();
+  syncVisualsPanel();
+  renderAlgorithmParams();
 
   wireFileInputs();
   wireToolbar();
   wirePanels();
+  initVisualsPanel();
   wirePanelResize();
   wireDataTabs();
   wireModals();
