@@ -1,44 +1,21 @@
-const DEFAULT_OPTIONS = Object.freeze({
-  width: 1000,
-  height: 1000,
-  iterations: 500,
-  threshold: 0.01,
-  theta: 0.5,
-  baseRadius: 10,
-});
+const DEFAULT_WIDTH = 1000;
+const DEFAULT_HEIGHT = 1000;
 
-const VERTEX_EDGE_REPULSION = 0.1;
-const EPSILON = 1e-9;
-const VERY_SMALL = 1e-8;
-const RESTART_THRESHOLD = 0.2;
-const MAX_COS = 0.5;
-const MAX_LINE_SEARCH_STEPS = 30;
-const MAX_QUADTREE_DEPTH = 32;
+const EDGELENGTH = 50;
+const VERTRAD = 15;
+const VERTWEIGHT = 1;
+const MINVERTSIZE = 4.0 / 9.0;
+const GOODENOUGH = 1e-4;
+const SMALL = 1e-4;
+const FAIRLYSMALL = 1e-6;
+const VERYSMALL = 1e-8;
+const MAXCOS = 0.5;
+const CAP = Number.MAX_VALUE / 1000;
+const RESTARTTHRESHOLD = 0.2;
+const INITIAL_STEP_SIZE = 0.1;
 
 function layoutError(message) {
   return new Error(`NetworkLayout error: ${message}`);
-}
-
-function normalizeOptions(options) {
-  const merged = { ...DEFAULT_OPTIONS, ...options };
-
-  if (merged.width <= 0 || merged.height <= 0) {
-    throw layoutError("Canvas width and height must be positive.");
-  }
-  if (merged.iterations < 0) {
-    throw layoutError("Iteration count cannot be negative.");
-  }
-  if (merged.threshold < 0) {
-    throw layoutError("Convergence threshold cannot be negative.");
-  }
-  if (merged.theta <= 0) {
-    throw layoutError("Barnes-Hut theta must be positive.");
-  }
-  if (merged.baseRadius < 0) {
-    throw layoutError("Base radius cannot be negative.");
-  }
-
-  return merged;
 }
 
 function assertGraphLike(graph) {
@@ -47,16 +24,44 @@ function assertGraphLike(graph) {
   }
 }
 
+function normalizeOptions(graph, options) {
+  const width = options.width ?? DEFAULT_WIDTH;
+  const height = options.height ?? DEFAULT_HEIGHT;
+  const iterations = options.iterations ?? (10 * graph.vertices.length);
+
+  if (width <= 0 || height <= 0) {
+    throw layoutError("Canvas width and height must be positive.");
+  }
+  if (iterations < 0) {
+    throw layoutError("Iteration count cannot be negative.");
+  }
+
+  return { width, height, iterations };
+}
+
+function numericValue(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
 function vertexFrequency(vertex) {
-  const rawFrequency = vertex.info?.frequency ?? vertex.info?.freq ?? vertex.frequency ?? 1;
-  const frequency = Number(rawFrequency);
-  return Number.isFinite(frequency) && frequency >= 0 ? frequency : 1;
+  const rawFrequency = vertex.info?.frequency ?? vertex.info?.freq ?? vertex.frequency;
+  const fallback = vertex.info?.inferred === true ? 0 : 1;
+  const frequency = numericValue(rawFrequency, fallback);
+  return frequency >= 0 ? frequency : fallback;
+}
+
+function vertexSize(vertex) {
+  return Math.max(MINVERTSIZE, vertexFrequency(vertex) * VERTWEIGHT);
+}
+
+function vertexRadius(vertex) {
+  return 0.5 * VERTRAD * Math.sqrt(vertexSize(vertex));
 }
 
 function edgeWeight(edge) {
-  const rawWeight = edge.weight ?? edge.info?.weight ?? 1;
-  const weight = Number(rawWeight);
-  return Number.isFinite(weight) && weight > 0 ? weight : 1;
+  const weight = numericValue(edge.weight ?? edge.info?.weight, 1);
+  return weight > 0 ? weight : 1;
 }
 
 function randomPosition(options) {
@@ -103,9 +108,9 @@ function randomUnitVector() {
   return { x: Math.cos(angle), y: Math.sin(angle) };
 }
 
-function separateCoincidentPositions(positions, k) {
+function separateCoincidentPositions(positions) {
   const seen = new Map();
-  const jitter = Math.max(k * 1e-4, 1e-4);
+  const jitter = Math.sqrt(VERYSMALL);
 
   for (const position of positions) {
     const key = `${position.x.toFixed(9)},${position.y.toFixed(9)}`;
@@ -120,28 +125,11 @@ function separateCoincidentPositions(positions, k) {
   }
 }
 
-function unitDelta(from, to, k) {
-  let dx = to.x - from.x;
-  let dy = to.y - from.y;
-  let distance = Math.sqrt(dx * dx + dy * dy);
-
-  if (distance < EPSILON) {
-    const direction = randomUnitVector();
-    dx = direction.x * Math.max(k * 1e-4, 1e-4);
-    dy = direction.y * Math.max(k * 1e-4, 1e-4);
-    distance = Math.sqrt(dx * dx + dy * dy);
-  }
-
-  return { dx, dy, distance };
-}
-
 function buildLayoutState(graph, options) {
   const vertices = graph.vertices;
-  const count = vertices.length;
-  const area = options.width * options.height;
-  const k = count > 0 ? Math.sqrt(area / count) : 0;
   const positions = vertices.map(() => randomPosition(options));
-  const radii = vertices.map((vertex) => options.baseRadius * Math.sqrt(vertexFrequency(vertex)));
+  const sizes = vertices.map(vertexSize);
+  const radii = vertices.map((vertex) => vertexRadius(vertex));
   const edges = graph.edges
     .filter((edge) => edge?.from && edge?.to && edge.from !== edge.to)
     .map((edge) => ({
@@ -150,15 +138,15 @@ function buildLayoutState(graph, options) {
       weight: edgeWeight(edge),
     }));
 
-  separateCoincidentPositions(positions, k);
+  separateCoincidentPositions(positions);
 
   return {
     graph,
     vertices,
     edges,
+    sizes,
     radii,
     positions,
-    k,
     options,
   };
 }
@@ -189,390 +177,113 @@ function centerPositions(positions, options) {
   }
 }
 
+function radiusSum(state, left, right) {
+  return 0.5 * VERTRAD * (
+    Math.sqrt(state.sizes[left]) + Math.sqrt(state.sizes[right])
+  );
+}
+
 function applySprings(state, positions, forces) {
   for (const edge of state.edges) {
     const from = positions[edge.from];
     const to = positions[edge.to];
-    const { dx, dy, distance } = unitDelta(from, to, state.k);
-    const radiusSum = state.radii[edge.from] + state.radii[edge.to];
-    const boundaryRestLength = state.k * edge.weight;
-    const centerRestLength = boundaryRestLength + radiusSum;
-    const displacement = distance - radiusSum;
-    const magnitude = (displacement * Math.abs(displacement)) / Math.max(centerRestLength, EPSILON);
-    const fx = (magnitude * dx) / distance;
-    const fy = (magnitude * dy) / distance;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
 
-    addForce(forces, edge.from, fx, fy);
-    addForce(forces, edge.to, -fx, -fy);
-  }
-}
-
-function repulsionMagnitude(distance, preferredDistance) {
-  if (distance < preferredDistance) {
-    return (preferredDistance * preferredDistance) / Math.max(distance, EPSILON);
-  }
-  return (preferredDistance * preferredDistance * preferredDistance)
-    / Math.max(distance * distance, EPSILON);
-}
-
-class QuadTreeNode {
-  constructor(minX, minY, maxX, maxY, depth = 0) {
-    this.minX = minX;
-    this.minY = minY;
-    this.maxX = maxX;
-    this.maxY = maxY;
-    this.depth = depth;
-    this.count = 0;
-    this.centroidX = 0;
-    this.centroidY = 0;
-    this.meanRadius = 0;
-    this.vertexIndex = -1;
-    this.children = null;
-  }
-
-  get isLeaf() {
-    return this.children === null;
-  }
-
-  get width() {
-    return this.maxX - this.minX;
-  }
-
-  get height() {
-    return this.maxY - this.minY;
-  }
-
-  insert(index, positions, radii) {
-    const position = positions[index];
-    this.centroidX = (this.centroidX * this.count + position.x) / (this.count + 1);
-    this.centroidY = (this.centroidY * this.count + position.y) / (this.count + 1);
-    this.meanRadius = (this.meanRadius * this.count + radii[index]) / (this.count + 1);
-    this.count += 1;
-
-    if (this.isLeaf && this.vertexIndex === -1) {
-      this.vertexIndex = index;
-      return;
+    if (length < VERYSMALL) {
+      continue;
     }
 
-    if (this.isLeaf) {
-      if (this.depth >= MAX_QUADTREE_DEPTH) {
-        return;
+    const radsum = radiusSum(state, edge.from, edge.to);
+    const prefLength = Math.max(EDGELENGTH * edge.weight, radsum);
+    const attraction = Math.min((length - radsum) / prefLength, CAP / length);
+    const forceX = (attraction * dx) / length;
+    const forceY = (attraction * dy) / length;
+
+    addForce(forces, edge.from, forceX, forceY);
+    addForce(forces, edge.to, -forceX, -forceY);
+  }
+}
+
+function nudgeCoincidentPair(positions, index) {
+  const direction = randomUnitVector();
+  const jitter = Math.sqrt(VERYSMALL);
+  positions[index].x += direction.x * jitter;
+  positions[index].y += direction.y * jitter;
+}
+
+function applyCharges(state, positions, forces) {
+  for (let left = 0; left < positions.length; left += 1) {
+    const from = positions[left];
+
+    for (let right = left + 1; right < positions.length; right += 1) {
+      const to = positions[right];
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const dist2 = dx * dx + dy * dy;
+
+      if (dist2 < VERYSMALL) {
+        nudgeCoincidentPair(positions, right);
+        continue;
       }
 
-      const existingIndex = this.vertexIndex;
-      this.vertexIndex = -1;
-      this.split();
-      this.childFor(positions[existingIndex]).insert(existingIndex, positions, radii);
-    }
+      const distance = Math.sqrt(dist2);
+      const radsum = radiusSum(state, left, right);
+      const preferredDistance = EDGELENGTH + radsum;
+      const preferredDistance2 = preferredDistance * preferredDistance;
+      const repulsion = Math.min(
+        dist2 < preferredDistance2
+          ? preferredDistance2 / dist2
+          : (preferredDistance2 * preferredDistance) / (dist2 * distance),
+        CAP,
+      );
+      const forceX = (repulsion * dx) / distance;
+      const forceY = (repulsion * dy) / distance;
 
-    this.childFor(position).insert(index, positions, radii);
-  }
-
-  split() {
-    const midX = (this.minX + this.maxX) / 2;
-    const midY = (this.minY + this.maxY) / 2;
-    this.children = [
-      new QuadTreeNode(this.minX, this.minY, midX, midY, this.depth + 1),
-      new QuadTreeNode(midX, this.minY, this.maxX, midY, this.depth + 1),
-      new QuadTreeNode(this.minX, midY, midX, this.maxY, this.depth + 1),
-      new QuadTreeNode(midX, midY, this.maxX, this.maxY, this.depth + 1),
-    ];
-  }
-
-  childFor(position) {
-    const midX = (this.minX + this.maxX) / 2;
-    const midY = (this.minY + this.maxY) / 2;
-    const east = position.x >= midX ? 1 : 0;
-    const south = position.y >= midY ? 2 : 0;
-    return this.children[east + south];
-  }
-}
-
-function buildQuadTree(positions, radii, k) {
-  let minX = positions[0].x;
-  let maxX = positions[0].x;
-  let minY = positions[0].y;
-  let maxY = positions[0].y;
-
-  for (const position of positions) {
-    minX = Math.min(minX, position.x);
-    maxX = Math.max(maxX, position.x);
-    minY = Math.min(minY, position.y);
-    maxY = Math.max(maxY, position.y);
-  }
-
-  const padding = Math.max(maxX - minX, maxY - minY, k, 1) * 0.01;
-  minX -= padding;
-  maxX += padding;
-  minY -= padding;
-  maxY += padding;
-
-  const side = Math.max(maxX - minX, maxY - minY, 1);
-  const root = new QuadTreeNode(minX, minY, minX + side, minY + side);
-
-  for (let index = 0; index < positions.length; index += 1) {
-    root.insert(index, positions, radii);
-  }
-
-  return root;
-}
-
-function nodeContainsPosition(node, position) {
-  return position.x >= node.minX
-    && position.x <= node.maxX
-    && position.y >= node.minY
-    && position.y <= node.maxY;
-}
-
-function applyRepulsionFromNode(state, positions, forces, vertexIndex, node) {
-  if (node.count === 0) {
-    return;
-  }
-
-  if (node.isLeaf && node.vertexIndex === vertexIndex) {
-    return;
-  }
-
-  const position = positions[vertexIndex];
-  let dx = position.x - node.centroidX;
-  let dy = position.y - node.centroidY;
-  let distance = Math.sqrt(dx * dx + dy * dy);
-
-  if (distance < EPSILON) {
-    const direction = randomUnitVector();
-    dx = direction.x * Math.max(state.k * 1e-4, 1e-4);
-    dy = direction.y * Math.max(state.k * 1e-4, 1e-4);
-    distance = Math.sqrt(dx * dx + dy * dy);
-  }
-
-  const cellSize = Math.max(node.width, node.height);
-  const containsVertex = nodeContainsPosition(node, position);
-  const wellSeparated = node.isLeaf || (!containsVertex && cellSize / distance < state.options.theta);
-
-  if (!wellSeparated) {
-    for (const child of node.children) {
-      applyRepulsionFromNode(state, positions, forces, vertexIndex, child);
-    }
-    return;
-  }
-
-  const preferredDistance = state.k + state.radii[vertexIndex] + node.meanRadius;
-  const magnitude = repulsionMagnitude(distance, preferredDistance) * node.count;
-  addForce(
-    forces,
-    vertexIndex,
-    (magnitude * dx) / distance,
-    (magnitude * dy) / distance,
-  );
-}
-
-function applyVertexRepulsion(state, positions, forces) {
-  if (positions.length < 2) {
-    return;
-  }
-
-  const tree = buildQuadTree(positions, state.radii, state.k);
-  for (let index = 0; index < positions.length; index += 1) {
-    applyRepulsionFromNode(state, positions, forces, index, tree);
-  }
-}
-
-function applyVertexEdgePair(state, positions, forces, vertexIndex, edge) {
-  if (vertexIndex === edge.from || vertexIndex === edge.to) {
-    return;
-  }
-
-  const vertex = positions[vertexIndex];
-  const from = positions[edge.from];
-  const to = positions[edge.to];
-  const edgeDx = to.x - from.x;
-  const edgeDy = to.y - from.y;
-  const edgeLength2 = edgeDx * edgeDx + edgeDy * edgeDy;
-
-  if (edgeLength2 < EPSILON) {
-    return;
-  }
-
-  let alpha = ((vertex.x - from.x) * edgeDx + (vertex.y - from.y) * edgeDy) / edgeLength2;
-  alpha = Math.max(0, Math.min(1, alpha));
-
-  const endpointIndex = alpha === 0 ? edge.from : alpha === 1 ? edge.to : -1;
-  const closest = endpointIndex >= 0
-    ? positions[endpointIndex]
-    : { x: from.x + alpha * edgeDx, y: from.y + alpha * edgeDy };
-
-  let dx = vertex.x - closest.x;
-  let dy = vertex.y - closest.y;
-  let distance = Math.sqrt(dx * dx + dy * dy);
-
-  if (distance < EPSILON) {
-    const direction = randomUnitVector();
-    dx = direction.x * Math.max(state.k * 1e-4, 1e-4);
-    dy = direction.y * Math.max(state.k * 1e-4, 1e-4);
-    distance = Math.sqrt(dx * dx + dy * dy);
-  }
-
-  const preferredDistance = endpointIndex >= 0
-    ? state.k + state.radii[vertexIndex] + state.radii[endpointIndex]
-    : state.k + state.radii[vertexIndex];
-
-  if (distance >= preferredDistance) {
-    return;
-  }
-
-  const magnitude = VERTEX_EDGE_REPULSION
-    * (((preferredDistance * preferredDistance) / distance) - preferredDistance);
-  const fx = (magnitude * dx) / distance;
-  const fy = (magnitude * dy) / distance;
-
-  addForce(forces, vertexIndex, fx, fy);
-
-  if (endpointIndex >= 0) {
-    addForce(forces, endpointIndex, -fx, -fy);
-    return;
-  }
-
-  addForce(forces, edge.from, -(1 - alpha) * fx, -(1 - alpha) * fy);
-  addForce(forces, edge.to, -alpha * fx, -alpha * fy);
-}
-
-function applyVertexEdgeRepulsion(state, positions, forces) {
-  for (const edge of state.edges) {
-    for (let vertexIndex = 0; vertexIndex < positions.length; vertexIndex += 1) {
-      applyVertexEdgePair(state, positions, forces, vertexIndex, edge);
+      addForce(forces, right, forceX, forceY);
+      addForce(forces, left, -forceX, -forceY);
     }
   }
 }
 
 function computeNegativeGradient(state, inputPositions) {
   const positions = clonePositions(inputPositions);
-  separateCoincidentPositions(positions, state.k);
+  separateCoincidentPositions(positions);
 
-  const forces = zeroVector(positions.length);
-  applySprings(state, positions, forces);
-  applyVertexRepulsion(state, positions, forces);
-  applyVertexEdgeRepulsion(state, positions, forces);
+  const gradient = zeroVector(positions.length);
+  applySprings(state, positions, gradient);
+  applyCharges(state, positions, gradient);
 
-  return { positions, gradient: forces };
+  return { positions, gradient };
 }
 
-function springEnergy(state, positions) {
-  let energy = 0;
-
-  for (const edge of state.edges) {
-    const from = positions[edge.from];
-    const to = positions[edge.to];
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const distance = Math.max(Math.sqrt(dx * dx + dy * dy), EPSILON);
-    const radiusSum = state.radii[edge.from] + state.radii[edge.to];
-    const boundaryRestLength = state.k * edge.weight;
-    const centerRestLength = boundaryRestLength + radiusSum;
-    const displacement = distance - radiusSum;
-
-    energy += Math.abs(displacement * displacement * displacement)
-      / (3 * Math.max(centerRestLength, EPSILON));
-  }
-
-  return energy;
-}
-
-function pairRepulsionEnergy(distance, preferredDistance) {
-  const safeDistance = Math.max(distance, EPSILON);
-
-  if (safeDistance < preferredDistance) {
-    return -(preferredDistance * preferredDistance) * Math.log(safeDistance);
-  }
-
-  return (preferredDistance * preferredDistance * preferredDistance) / safeDistance;
-}
-
-function vertexRepulsionEnergy(state, positions) {
-  let energy = 0;
-
-  for (let left = 0; left < positions.length; left += 1) {
-    for (let right = left + 1; right < positions.length; right += 1) {
-      const dx = positions[left].x - positions[right].x;
-      const dy = positions[left].y - positions[right].y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      const preferredDistance = state.k + state.radii[left] + state.radii[right];
-      energy += pairRepulsionEnergy(distance, preferredDistance);
-    }
-  }
-
-  return energy;
-}
-
-function vertexEdgeEnergy(state, positions) {
-  let energy = 0;
-
-  for (const edge of state.edges) {
-    for (let vertexIndex = 0; vertexIndex < positions.length; vertexIndex += 1) {
-      if (vertexIndex === edge.from || vertexIndex === edge.to) {
-        continue;
-      }
-
-      const vertex = positions[vertexIndex];
-      const from = positions[edge.from];
-      const to = positions[edge.to];
-      const edgeDx = to.x - from.x;
-      const edgeDy = to.y - from.y;
-      const edgeLength2 = edgeDx * edgeDx + edgeDy * edgeDy;
-
-      if (edgeLength2 < EPSILON) {
-        continue;
-      }
-
-      let alpha = ((vertex.x - from.x) * edgeDx + (vertex.y - from.y) * edgeDy) / edgeLength2;
-      alpha = Math.max(0, Math.min(1, alpha));
-
-      const endpointIndex = alpha === 0 ? edge.from : alpha === 1 ? edge.to : -1;
-      const closest = endpointIndex >= 0
-        ? positions[endpointIndex]
-        : { x: from.x + alpha * edgeDx, y: from.y + alpha * edgeDy };
-      const dx = vertex.x - closest.x;
-      const dy = vertex.y - closest.y;
-      const distance = Math.max(Math.sqrt(dx * dx + dy * dy), EPSILON);
-      const preferredDistance = endpointIndex >= 0
-        ? state.k + state.radii[vertexIndex] + state.radii[endpointIndex]
-        : state.k + state.radii[vertexIndex];
-
-      if (distance < preferredDistance) {
-        energy += VERTEX_EDGE_REPULSION
-          * (-(preferredDistance * preferredDistance) * Math.log(distance)
-            + preferredDistance * distance);
-      }
-    }
-  }
-
-  return energy;
-}
-
-function totalEnergy(state, positions) {
-  return springEnergy(state, positions)
-    + vertexRepulsionEnergy(state, positions)
-    + vertexEdgeEnergy(state, positions);
-}
-
-function computeDirection(gradient, previousDirection, previousGradMag2, iteration) {
+function computeDirection(gradient, previousDirection, previousGradMag2) {
   const gradMag2 = dot(gradient, gradient);
 
-  if (!previousDirection || previousGradMag2 <= 0 || iteration % (2 * gradient.length) === 0) {
+  if (!previousDirection || previousGradMag2 <= 0) {
     return {
       direction: gradient.map((force) => ({ x: force.x, y: force.y })),
       gradMag2,
     };
   }
 
-  const beta = gradMag2 / previousGradMag2;
+  if (gradMag2 < FAIRLYSMALL) {
+    return {
+      direction: zeroVector(gradient.length),
+      gradMag2,
+    };
+  }
+
+  const ratio = gradMag2 / previousGradMag2;
   const direction = gradient.map((force, index) => ({
-    x: force.x + beta * previousDirection[index].x,
-    y: force.y + beta * previousDirection[index].y,
+    x: force.x + ratio * previousDirection[index].x,
+    y: force.y + ratio * previousDirection[index].y,
   }));
   const directionMag2 = dot(direction, direction);
-  const cosine = dot(direction, gradient) / Math.sqrt(Math.max(gradMag2 * directionMag2, EPSILON));
+  const cosine = dot(direction, gradient) / Math.sqrt(Math.max(gradMag2 * directionMag2, VERYSMALL));
 
-  if (cosine < RESTART_THRESHOLD) {
+  if (cosine < RESTARTTHRESHOLD) {
     return {
       direction: gradient.map((force) => ({ x: force.x, y: force.y })),
       gradMag2,
@@ -584,40 +295,16 @@ function computeDirection(gradient, previousDirection, previousGradMag2, iterati
 
 function lineSearch(state, positions, direction, stepGuess) {
   const directionMagnitude = l2Norm(direction);
-  const currentEnergy = totalEnergy(state, positions);
   let lo = 0;
   let hi = Number.POSITIVE_INFINITY;
-  let stepSize = Math.max(stepGuess, VERY_SMALL);
-  let best = null;
+  let stepSize = Math.max(stepGuess, VERYSMALL);
+  let trial = computeNegativeGradient(state, addScaledPositions(positions, direction, stepSize));
+  let trialGradientMagnitude = l2Norm(trial.gradient);
+  let cosine = dot(trial.gradient, direction)
+    / Math.max(directionMagnitude * trialGradientMagnitude, VERYSMALL);
 
-  for (let attempt = 0; attempt < MAX_LINE_SEARCH_STEPS; attempt += 1) {
-    const trialPositions = addScaledPositions(positions, direction, stepSize);
-    const trial = computeNegativeGradient(state, trialPositions);
-    const trialGradientMagnitude = l2Norm(trial.gradient);
-    const trialEnergy = totalEnergy(state, trial.positions);
-    const cosine = dot(trial.gradient, direction)
-      / Math.max(directionMagnitude * trialGradientMagnitude, EPSILON);
-
-    if (Number.isFinite(trialEnergy) && trialEnergy < currentEnergy) {
-      if (!best || trialEnergy < best.energy) {
-        best = {
-          positions: trial.positions,
-          gradient: trial.gradient,
-          stepSize,
-          energy: trialEnergy,
-        };
-      }
-    }
-
-    if (trialEnergy < currentEnergy && cosine >= 0 && cosine <= MAX_COS) {
-      return {
-        positions: trial.positions,
-        gradient: trial.gradient,
-        stepSize,
-      };
-    }
-
-    if (trialEnergy >= currentEnergy || cosine < 0 || !Number.isFinite(trialEnergy)) {
+  while (((cosine < 0) || (cosine > MAXCOS)) && ((hi - lo) > VERYSMALL)) {
+    if (!Number.isFinite(cosine) || cosine < 0) {
       hi = stepSize;
       stepSize = (lo + hi) / 2;
     } else if (Number.isFinite(hi)) {
@@ -628,22 +315,16 @@ function lineSearch(state, positions, direction, stepGuess) {
       stepSize *= 2;
     }
 
-    if (stepSize <= VERY_SMALL || (Number.isFinite(hi) && hi - lo <= VERY_SMALL)) {
-      break;
-    }
+    trial = computeNegativeGradient(state, addScaledPositions(positions, direction, stepSize));
+    trialGradientMagnitude = l2Norm(trial.gradient);
+    cosine = dot(trial.gradient, direction)
+      / Math.max(directionMagnitude * trialGradientMagnitude, VERYSMALL);
   }
 
-  if (best) {
-    return best;
-  }
-
-  const fallbackStep = Math.max(stepGuess * 0.1, VERY_SMALL);
-  const fallbackPositions = addScaledPositions(positions, direction, fallbackStep);
-  const fallback = computeNegativeGradient(state, fallbackPositions);
   return {
-    positions: fallback.positions,
-    gradient: fallback.gradient,
-    stepSize: fallbackStep,
+    positions: trial.positions,
+    gradient: trial.gradient,
+    stepSize,
   };
 }
 
@@ -656,42 +337,36 @@ function writePositionsToGraph(state, positions) {
 }
 
 /**
- * Computes a Tunkelang-style force-directed layout in place.
+ * Computes a PopART-compatible force-directed layout in place.
  */
 export function computeLayout(graph, options = {}) {
   assertGraphLike(graph);
 
-  const normalizedOptions = normalizeOptions(options);
+  const normalizedOptions = normalizeOptions(graph, options);
   const state = buildLayoutState(graph, normalizedOptions);
 
   if (state.vertices.length === 0) {
     return graph;
   }
 
-  const positions = clonePositions(state.positions);
-  separateCoincidentPositions(positions, state.k);
-  centerPositions(positions, normalizedOptions);
+  const initialPositions = clonePositions(state.positions);
+  centerPositions(initialPositions, normalizedOptions);
 
-  let { positions: currentPositions, gradient } = computeNegativeGradient(state, positions);
+  let { positions: currentPositions, gradient } = computeNegativeGradient(state, initialPositions);
   let previousDirection = null;
   let previousGradMag2 = 0;
-  let stepSize = 0.1;
+  let stepSize = INITIAL_STEP_SIZE;
 
   for (let iteration = 0; iteration < normalizedOptions.iterations; iteration += 1) {
     const gradientMagnitude = l2Norm(gradient);
-    if (gradientMagnitude < normalizedOptions.threshold) {
+    if (gradientMagnitude <= GOODENOUGH) {
       break;
     }
 
-    const directionResult = computeDirection(
-      gradient,
-      previousDirection,
-      previousGradMag2,
-      iteration,
-    );
+    const directionResult = computeDirection(gradient, previousDirection, previousGradMag2);
     const direction = directionResult.direction;
 
-    if (l2Norm(direction) < VERY_SMALL) {
+    if (l2Norm(direction) < SMALL) {
       break;
     }
 
