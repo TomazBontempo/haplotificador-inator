@@ -54,6 +54,20 @@ body {
   background: #3a3a3a;
 }
 
+#undo-btn,
+#redo-btn {
+  font-size: 16px;
+  padding: 0 10px;
+  opacity: 1;
+  transition: opacity 0.15s;
+}
+
+#undo-btn:disabled,
+#redo-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .menu-wrapper {
   position: relative;
   height: 100%;

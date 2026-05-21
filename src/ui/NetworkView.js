@@ -85,6 +85,10 @@ function createInitialState() {
       panX: 0,
       panY: 0,
     },
+    history: {
+      undoStack: [],
+      redoStack: [],
+    },
     dataPanelCollapsed: false,
     propsPanelCollapsed: false,
     selectedElements: [],
@@ -107,6 +111,7 @@ function resetState() {
   dataPanelWidth = DEFAULT_PANEL_WIDTH;
   propsPanelWidth = DEFAULT_PANEL_WIDTH;
   movedVertexIndices.clear();
+  updateUndoRedoButtons();
 }
 
 function visualsPanelMarkup() {
@@ -197,6 +202,8 @@ function appShell() {
         <button id="save-btn" type="button" title="Save (Ctrl+S)">💾</button>
         <button id="save-as-btn" type="button" title="Save As (Ctrl+Shift+S)">💾+</button>
         <button id="export-btn" type="button">Export</button>
+        <button id="undo-btn" type="button" title="Undo (Ctrl+Z)" disabled>↩</button>
+        <button id="redo-btn" type="button" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
         <input id="open-file-input" class="hidden" type="file" accept=".nex,.hapnet">
         <div id="algorithm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="algorithm-title">
           <div class="modal-dialog">
@@ -1158,6 +1165,108 @@ function markVisualChange() {
   }
 }
 
+function createHistorySnapshot(type) {
+  if (!state.graph) {
+    return null;
+  }
+
+  return {
+    type,
+    vertexPositions: state.graph.vertices.map((vertex) => ({
+      index: vertex.index,
+      x: vertex.x,
+      y: vertex.y,
+    })),
+    visualOptions: JSON.parse(JSON.stringify(state.visualOptions)),
+  };
+}
+
+function trimUndoStack() {
+  if (state.history.undoStack.length > 20) {
+    state.history.undoStack.shift();
+  }
+}
+
+function updateUndoRedoButtons() {
+  const undoButton = byId("undo-btn");
+  const redoButton = byId("redo-btn");
+  if (undoButton) {
+    undoButton.disabled = state.history.undoStack.length === 0;
+  }
+  if (redoButton) {
+    redoButton.disabled = state.history.redoStack.length === 0;
+  }
+}
+
+function clearHistory() {
+  state.history.undoStack = [];
+  state.history.redoStack = [];
+  updateUndoRedoButtons();
+}
+
+function pushUndoSnapshot(type) {
+  const snapshot = createHistorySnapshot(type);
+  if (!snapshot) {
+    return;
+  }
+
+  state.history.undoStack.push(snapshot);
+  trimUndoStack();
+  state.history.redoStack = [];
+  updateUndoRedoButtons();
+}
+
+function restoreSnapshot(snapshot) {
+  if (!snapshot || !state.graph) {
+    return;
+  }
+
+  for (const entry of snapshot.vertexPositions) {
+    const vertex = state.graph.vertices.find((candidate) => candidate.index === entry.index);
+    if (vertex) {
+      vertex.x = entry.x;
+      vertex.y = entry.y;
+    }
+  }
+
+  state.visualOptions = JSON.parse(JSON.stringify(snapshot.visualOptions));
+}
+
+function undo() {
+  if (state.history.undoStack.length === 0) {
+    return;
+  }
+
+  const snapshot = state.history.undoStack.pop();
+  const current = createHistorySnapshot(snapshot.type);
+  if (current) {
+    state.history.redoStack.push(current);
+  }
+  restoreSnapshot(snapshot);
+  rerenderNetwork();
+  syncVisualsPanel();
+  markVisualChange();
+  updateUndoRedoButtons();
+}
+
+function redo() {
+  if (state.history.redoStack.length === 0) {
+    return;
+  }
+
+  const snapshot = state.history.redoStack.pop();
+  const current = createHistorySnapshot(snapshot.type);
+  if (current) {
+    state.history.undoStack.push(current);
+    trimUndoStack();
+  }
+  restoreSnapshot(snapshot);
+  rerenderNetwork();
+  syncVisualsPanel();
+  markVisualChange();
+  updateUndoRedoButtons();
+}
+
 function edgeDisplayMode() {
   return state.visualOptions.edges?.displayMode === "ticks" ? "ticks" : "labels";
 }
@@ -1195,14 +1304,17 @@ function updateTraitColorPickers() {
     if (!traitColors[index]) {
       state.visualOptions.vertices.traitColors[index] = input.value;
     }
-    input.addEventListener("input", (event) => {
+    input.addEventListener("mousedown", () => {
+      pushUndoSnapshot("color");
+    });
+    input.addEventListener("change", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLInputElement)) {
         return;
       }
       state.visualOptions.vertices.traitColors[index] = target.value;
-      markVisualChange();
       rerenderNetwork();
+      markVisualChange();
     });
 
     row.append(label, input);
@@ -1248,16 +1360,22 @@ function syncVisualsPanel() {
 }
 
 function initVisualsPanel() {
-  byId("visual-edge-color")?.addEventListener("input", (event) => {
+  byId("visual-edge-color")?.addEventListener("mousedown", () => {
+    pushUndoSnapshot("color");
+  });
+  byId("visual-edge-color")?.addEventListener("change", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) {
       return;
     }
     state.visualOptions.edges.color = target.value;
-    markVisualChange();
     rerenderNetwork();
+    markVisualChange();
   });
 
+  byId("visual-edge-width")?.addEventListener("mousedown", () => {
+    pushUndoSnapshot("width");
+  });
   byId("visual-edge-width")?.addEventListener("input", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) {
@@ -1271,6 +1389,10 @@ function initVisualsPanel() {
     markVisualChange();
     rerenderNetwork();
   });
+  byId("visual-edge-width")?.addEventListener("change", () => {
+    rerenderNetwork();
+    markVisualChange();
+  });
 
   document.querySelectorAll('input[name="edge-display"]').forEach((input) => {
     input.addEventListener("change", (event) => {
@@ -1278,22 +1400,29 @@ function initVisualsPanel() {
       if (!(target instanceof HTMLInputElement)) {
         return;
       }
+      pushUndoSnapshot("display");
       state.visualOptions.edges.displayMode = target.value;
-      markVisualChange();
       rerenderNetwork();
+      markVisualChange();
     });
   });
 
-  byId("visual-inferred-color")?.addEventListener("input", (event) => {
+  byId("visual-inferred-color")?.addEventListener("mousedown", () => {
+    pushUndoSnapshot("color");
+  });
+  byId("visual-inferred-color")?.addEventListener("change", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) {
       return;
     }
     state.visualOptions.vertices.inferredColor = target.value;
-    markVisualChange();
     rerenderNetwork();
+    markVisualChange();
   });
 
+  byId("visual-font-size")?.addEventListener("mousedown", () => {
+    pushUndoSnapshot("font");
+  });
   byId("visual-font-size")?.addEventListener("input", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) {
@@ -1306,6 +1435,10 @@ function initVisualsPanel() {
     }
     markVisualChange();
     rerenderNetwork();
+  });
+  byId("visual-font-size")?.addEventListener("change", () => {
+    rerenderNetwork();
+    markVisualChange();
   });
 }
 
@@ -1370,6 +1503,7 @@ export async function runCurrentPipeline() {
     layoutWorker = null;
 
     state.graph = reconstructGraph(layoutGraphJSON);
+    clearHistory();
     state.visualOptions.width = 1000;
     state.visualOptions.height = 1000;
     assignTraitColors(state.hapNet);
@@ -1407,6 +1541,7 @@ async function handleNexusFileSelected(file) {
   state.parsedNexus = null;
   state.hapNet = null;
   state.graph = null;
+  clearHistory();
   state.visualOptions.vertices.traitColors = [];
   syncVisualsPanel();
   state.maskedSites = 0;
@@ -1525,6 +1660,7 @@ function applySavedState(savedState, status = "Saved") {
   state.maskedSites = savedState.maskedSites ?? 0;
   state.parsedNexus = savedState.parsedNexus ?? null;
   state.graph = reconstructGraph(savedState.graph);
+  clearHistory();
   state.hapNet = savedHapNetSummary(savedState);
   state.lastSaved = savedState.savedAt ? new Date(savedState.savedAt) : null;
   state.saveStatus = status;
@@ -1983,6 +2119,14 @@ function wireToolbar() {
     openExportModal();
     blurClickedControl(event);
   });
+  byId("undo-btn")?.addEventListener("click", (event) => {
+    undo();
+    blurClickedControl(event);
+  });
+  byId("redo-btn")?.addEventListener("click", (event) => {
+    redo();
+    blurClickedControl(event);
+  });
 }
 
 function wirePanels() {
@@ -2240,6 +2384,7 @@ function wireViewportInteractions() {
       const movedDistance = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
 
       if (!isDraggingNodes && movedDistance > DRAG_THRESHOLD) {
+        pushUndoSnapshot("drag");
         isDraggingNodes = true;
         if (!pendingVertexGesture.element.classList.contains("selected")) {
           selectGraphElement(pendingVertexGesture.element, pendingVertexGesture.shiftKey);
@@ -2332,7 +2477,13 @@ function wireKeyboardShortcuts() {
     }
 
     const key = event.key.toLowerCase();
-    if (key === "s") {
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      undo();
+    } else if ((key === "z" && event.shiftKey) || key === "y") {
+      event.preventDefault();
+      redo();
+    } else if (key === "s") {
       event.preventDefault();
       if (event.shiftKey) {
         saveAsProject();
