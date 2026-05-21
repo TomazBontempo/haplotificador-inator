@@ -4,6 +4,7 @@ import { applyUndefinedSiteMask } from "../model/SiteMask.js";
 import { parseNexus } from "../parser/NexusParser.js";
 import { renderEdgeItem } from "../renderer/EdgeItem.js";
 import { renderNetwork } from "../renderer/NetworkRenderer.js";
+import { schemeSet3, schemeTableau10 } from "d3-scale-chromatic";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
@@ -1032,6 +1033,61 @@ function renderGraph() {
   return svg;
 }
 
+function varyHexLightness(hex, step) {
+  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!match) {
+    return hex;
+  }
+
+  const amount = Math.min(0.45, 0.16 + (Math.floor((step - 1) / 2) * 0.08));
+  const target = step % 2 === 0 ? 0 : 255;
+  const channels = match.slice(1).map((channel) => {
+    const value = Number.parseInt(channel, 16);
+    return Math.round(value + (target - value) * amount)
+      .toString(16)
+      .padStart(2, "0");
+  });
+
+  return `#${channels.join("")}`;
+}
+
+function colorForTraitIndex(index, traitCount) {
+  if (traitCount <= 10) {
+    return schemeTableau10[index];
+  }
+  if (traitCount <= 12) {
+    return schemeSet3[index];
+  }
+  if (index < 10) {
+    return schemeTableau10[index];
+  }
+  if (index < 12) {
+    return schemeSet3[index];
+  }
+
+  const base = schemeTableau10[index % schemeTableau10.length];
+  const variationStep = Math.floor(index / schemeTableau10.length);
+  return varyHexLightness(base, variationStep);
+}
+
+function assignTraitColors(hapNet) {
+  const traitCount = hapNet?.traitNames?.length ?? 0;
+  const vertices = state.visualOptions.vertices ?? {};
+  const existing = Array.isArray(vertices.traitColors) ? vertices.traitColors : [];
+
+  if (existing.length === traitCount) {
+    return;
+  }
+
+  state.visualOptions.vertices = {
+    ...vertices,
+    traitColors: Array.from(
+      { length: traitCount },
+      (_, index) => colorForTraitIndex(index, traitCount),
+    ),
+  };
+}
+
 async function autoSaveCurrentState(status = "Auto-saved") {
   if (!state.graph) {
     return;
@@ -1124,6 +1180,7 @@ export async function runCurrentPipeline() {
     state.graph = reconstructGraph(layoutGraphJSON);
     state.visualOptions.width = 1000;
     state.visualOptions.height = 1000;
+    assignTraitColors(state.hapNet);
     setProgress("Rendering network...", 90);
     renderGraph();
     setProgress("Rendering network...", 100);
@@ -1157,6 +1214,7 @@ async function handleNexusFileSelected(file) {
   state.parsedNexus = null;
   state.hapNet = null;
   state.graph = null;
+  state.visualOptions.vertices.traitColors = [];
   state.maskedSites = 0;
   state.saveHandle = null;
   state.lastSaved = null;

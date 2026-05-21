@@ -129,6 +129,45 @@ describe("NetworkView", () => {
     jest.useRealTimers();
   });
 
+  test("assigns trait colors after first network render", async () => {
+    jest.useFakeTimers();
+    installPipelineMocks(["Amazonia", "Cerrado", "Chaco", "MataAtlantica", "Pantanal"]);
+    state.currentFile = {
+      name: "tapir.nex",
+      text: jest.fn().mockResolvedValue("#NEXUS"),
+    };
+
+    document.getElementById("algorithm-ok").click();
+    await flushPromises();
+    await jest.advanceTimersByTimeAsync(300);
+
+    expect(state.visualOptions.vertices.traitColors).toEqual([
+      "#4e79a7",
+      "#f28e2c",
+      "#e15759",
+      "#76b7b2",
+      "#59a14f",
+    ]);
+    jest.useRealTimers();
+  });
+
+  test("preserves existing trait colors when trait count is unchanged", async () => {
+    jest.useFakeTimers();
+    installPipelineMocks(["Amazonia", "Cerrado"]);
+    state.visualOptions.vertices.traitColors = ["#111111", "#222222"];
+    state.currentFile = {
+      name: "tapir.nex",
+      text: jest.fn().mockResolvedValue("#NEXUS"),
+    };
+
+    document.getElementById("algorithm-ok").click();
+    await flushPromises();
+    await jest.advanceTimersByTimeAsync(300);
+
+    expect(state.visualOptions.vertices.traitColors).toEqual(["#111111", "#222222"]);
+    jest.useRealTimers();
+  });
+
   test("save updates lastSaved state", async () => {
     const autoSave = jest.fn().mockResolvedValue(undefined);
     __setNetworkViewDependencies({
@@ -144,7 +183,7 @@ describe("NetworkView", () => {
   });
 });
 
-function installPipelineMocks() {
+function installPipelineMocks(traitNames = []) {
   const graphJSON = {
     vertices: [
       {
@@ -176,10 +215,11 @@ function installPipelineMocks() {
   class MockHapNet {
     constructor() {
       this.nseqs = 2;
+      this.traitNames = traitNames;
     }
 
     toJSON() {
-      return { haplotypes: [] };
+      return { haplotypes: [], traitNames };
     }
   }
 
