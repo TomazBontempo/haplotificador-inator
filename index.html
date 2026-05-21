@@ -52,7 +52,6 @@
           <label>Width <input id="export-width" type="number" min="1" value="2000"></label>
           <label>Height <input id="export-height" type="number" min="1" value="2000"></label>
           <label><input id="export-transparent" type="checkbox"> Transparent background</label>
-          <p id="export-warning" class="hidden warning">For publication quality, use at least 3000×3000</p>
           <div class="modal-actions">
             <button id="export-confirm" type="button">Export</button>
             <button id="export-cancel" type="button">Cancel</button>
@@ -123,7 +122,23 @@
         <button id="collapse-props" type="button">▶</button>
         <div id="props-resize-handle" class="resize-handle"></div>
         <div id="props-content">
-          <p>Select a node or edge to see properties</p>
+          <h2>Visuals</h2>
+          <div id="visuals-panel-content">
+            <div class="visuals-section">
+              <h4>Edge mutations</h4>
+              <div class="visuals-row">
+                <label>
+                  <input type="radio" name="edge-display" value="labels" checked>
+                  Labels
+                </label>
+                <label>
+                  <input type="radio" name="edge-display" value="ticks">
+                  Tick marks
+                </label>
+              </div>
+            </div>
+          </div>
+          <div id="selection-details"></div>
         </div>
       </aside>
     </div>

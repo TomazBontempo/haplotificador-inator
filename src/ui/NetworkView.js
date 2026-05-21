@@ -2,6 +2,7 @@ import Graph from "../model/Graph.js";
 import HapNet from "../model/HapNet.js";
 import { applyUndefinedSiteMask } from "../model/SiteMask.js";
 import { parseNexus } from "../parser/NexusParser.js";
+import { renderEdgeItem } from "../renderer/EdgeItem.js";
 import { renderNetwork } from "../renderer/NetworkRenderer.js";
 
 const MIN_ZOOM = 0.1;
@@ -72,7 +73,13 @@ function createInitialState() {
       width: 1000,
       height: 1000,
       background: { color: "#ffffff" },
-      edges: { color: "#666666", width: 1.5, labelColor: "#333333", showLabels: true },
+      edges: {
+        color: "#666666",
+        width: 1.5,
+        labelColor: "#333333",
+        showLabels: true,
+        displayMode: "labels",
+      },
       vertices: { defaultColor: "#999999", inferredColor: "#333333", traitColors: [] },
       baseRadius: 10,
       zoom: 1,
@@ -101,6 +108,40 @@ function resetState() {
   dataPanelWidth = DEFAULT_PANEL_WIDTH;
   propsPanelWidth = DEFAULT_PANEL_WIDTH;
   movedVertexIndices.clear();
+}
+
+function edgeDisplayMode() {
+  return state.visualOptions.edges?.displayMode === "ticks" ? "ticks" : "labels";
+}
+
+function visualsPanelMarkup(selectionMarkup = "") {
+  const displayMode = edgeDisplayMode();
+  return `
+    <h2>Visuals</h2>
+    <div id="visuals-panel-content">
+      <div class="visuals-section">
+        <h4>Edge mutations</h4>
+        <div class="visuals-row">
+          <label>
+            <input type="radio" name="edge-display" value="labels" ${displayMode === "labels" ? "checked" : ""}>
+            Labels
+          </label>
+          <label>
+            <input type="radio" name="edge-display" value="ticks" ${displayMode === "ticks" ? "checked" : ""}>
+            Tick marks
+          </label>
+        </div>
+      </div>
+    </div>
+    <div id="selection-details">${selectionMarkup}</div>
+  `;
+}
+
+function renderVisualsPanel(selectionMarkup = "") {
+  const propsContent = byId("props-content");
+  if (propsContent) {
+    propsContent.innerHTML = visualsPanelMarkup(selectionMarkup);
+  }
 }
 
 function appShell() {
@@ -150,7 +191,6 @@ function appShell() {
             <label>Width <input id="export-width" type="number" min="1" value="2000"></label>
             <label>Height <input id="export-height" type="number" min="1" value="2000"></label>
             <label><input id="export-transparent" type="checkbox"> Transparent background</label>
-            <p id="export-warning" class="hidden warning">For publication quality, use at least 3000×3000</p>
             <div class="modal-actions">
               <button id="export-confirm" type="button">Export</button>
               <button id="export-cancel" type="button">Cancel</button>
@@ -221,7 +261,7 @@ function appShell() {
           <button id="collapse-props" type="button">▶</button>
           <div id="props-resize-handle" class="resize-handle"></div>
           <div id="props-content">
-            <p>Select a node or edge to see properties</p>
+            ${visualsPanelMarkup()}
           </div>
         </aside>
       </div>
@@ -1021,6 +1061,22 @@ function markVisualChange() {
   }
 }
 
+function setEdgeDisplayMode(displayMode) {
+  if (!["labels", "ticks"].includes(displayMode) || displayMode === edgeDisplayMode()) {
+    return;
+  }
+
+  state.visualOptions.edges = {
+    ...state.visualOptions.edges,
+    displayMode,
+  };
+  markVisualChange();
+  if (state.graph) {
+    renderGraph();
+  }
+  renderVisualsPanel();
+}
+
 export async function runCurrentPipeline() {
   if (!state.currentFile) {
     showMessage("Open a .nex file before running an algorithm.");
@@ -1166,6 +1222,25 @@ function sampledVertexCount(graph) {
   return graph?.vertices?.filter((vertex) => vertex.info?.sampled !== false).length ?? 0;
 }
 
+function mergeVisualOptions(savedVisualOptions = {}) {
+  return {
+    ...state.visualOptions,
+    ...savedVisualOptions,
+    background: {
+      ...state.visualOptions.background,
+      ...(savedVisualOptions.background ?? {}),
+    },
+    edges: {
+      ...state.visualOptions.edges,
+      ...(savedVisualOptions.edges ?? {}),
+    },
+    vertices: {
+      ...state.visualOptions.vertices,
+      ...(savedVisualOptions.vertices ?? {}),
+    },
+  };
+}
+
 function applySavedState(savedState, status = "Saved") {
   state.currentFile = savedState.originalFilename
     ? { name: savedState.originalFilename }
@@ -1175,10 +1250,7 @@ function applySavedState(savedState, status = "Saved") {
     ...state.algorithmParams,
     ...(savedState.algorithmParams ?? {}),
   };
-  state.visualOptions = {
-    ...state.visualOptions,
-    ...(savedState.visualOptions ?? savedState.visual ?? {}),
-  };
+  state.visualOptions = mergeVisualOptions(savedState.visualOptions ?? savedState.visual ?? {});
   state.maskedSites = savedState.maskedSites ?? 0;
   state.parsedNexus = savedState.parsedNexus ?? null;
   state.graph = reconstructGraph(savedState.graph);
@@ -1270,10 +1342,7 @@ function clearSelection() {
     element.classList.remove("selected");
   });
   state.selectedElements = [];
-  const propsContent = byId("props-content");
-  if (propsContent) {
-    propsContent.innerHTML = "<p>Select a node or edge to see properties</p>";
-  }
+  renderVisualsPanel();
 }
 
 function selectedVertexElements() {
@@ -1290,17 +1359,17 @@ function updatePropertiesPanel(element) {
     const vertex = state.graph?.vertices[Number(element.dataset.index)];
     const info = vertex?.info ?? {};
     const traits = Array.isArray(info.traits) ? info.traits : [];
-    propsContent.innerHTML = `
+    renderVisualsPanel(`
       <h2>${info.name ?? vertex?.label ?? "Vertex"}</h2>
       <p>Frequency: ${info.frequency ?? 0}</p>
       <p>Traits: ${traits.length ? traits.join(", ") : "—"}</p>
-    `;
+    `);
   } else if (element.classList.contains("edge")) {
     const edge = state.graph?.edges[Number(element.dataset.index)];
-    propsContent.innerHTML = `
+    renderVisualsPanel(`
       <h2>Edge</h2>
       <p>Weight: ${edge?.weight ?? edge?.info?.weight ?? "—"}</p>
-    `;
+    `);
   }
 }
 
@@ -1324,20 +1393,18 @@ function suppressUpcomingSvgClick() {
 
 function updateEdgeElement(edge) {
   const edgeElement = currentSvg()?.querySelector(`.edge[data-index="${edge.index}"]`);
-  const line = edgeElement?.querySelector("line");
-  if (!line) {
+  if (!edgeElement) {
     return;
   }
-  line.setAttribute("x1", String(edge.from.x ?? 0));
-  line.setAttribute("y1", String(edge.from.y ?? 0));
-  line.setAttribute("x2", String(edge.to.x ?? 0));
-  line.setAttribute("y2", String(edge.to.y ?? 0));
 
-  const label = edgeElement.querySelector(".edge-label");
-  if (label) {
-    label.setAttribute("x", String(((edge.from.x ?? 0) + (edge.to.x ?? 0)) / 2));
-    label.setAttribute("y", String(((edge.from.y ?? 0) + (edge.to.y ?? 0)) / 2));
+  const replacement = renderEdgeItem(edge, state.visualOptions);
+  if (edgeElement.classList.contains("selected")) {
+    replacement.classList.add("selected");
   }
+  state.selectedElements = state.selectedElements.map((selectedElement) =>
+    selectedElement === edgeElement ? replacement : selectedElement,
+  );
+  edgeElement.replaceWith(replacement);
 }
 
 function vertexByIndex(index) {
@@ -1559,14 +1626,7 @@ function storeAlgorithmSelection() {
   }
 }
 
-function updateExportWarning() {
-  const width = Number(byId("export-width")?.value ?? 2000);
-  const height = Number(byId("export-height")?.value ?? 2000);
-  setHidden(byId("export-warning"), width >= 3000 && height >= 3000);
-}
-
 function openExportModal() {
-  updateExportWarning();
   setHidden(byId("export-modal"), false);
 }
 
@@ -1685,6 +1745,15 @@ function wirePanels() {
     syncPanelState();
     blurClickedControl(event);
   });
+
+  byId("props-content")?.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || target.name !== "edge-display") {
+      return;
+    }
+    setEdgeDisplayMode(target.value);
+    blurClickedControl(event);
+  });
 }
 
 function setDataPanelWidth(width) {
@@ -1792,8 +1861,6 @@ function wireModals() {
     blurClickedControl(event);
   });
 
-  byId("export-width")?.addEventListener("input", updateExportWarning);
-  byId("export-height")?.addEventListener("input", updateExportWarning);
   byId("export-confirm")?.addEventListener("click", async (event) => {
     try {
       await exportCurrentNetwork();
@@ -2079,6 +2146,7 @@ export function initNetworkView() {
   resetState();
   syncPanelState();
   syncStatusBar();
+  renderVisualsPanel();
   renderAlgorithmParams();
 
   if (app?.dataset.networkViewInitialized === "true") {

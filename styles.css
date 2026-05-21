@@ -96,6 +96,46 @@ body {
   overflow: hidden;
 }
 
+#props-content h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+}
+
+.visuals-section {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #d8d8d8;
+}
+
+.visuals-section h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.visuals-row {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.visuals-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#selection-details {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+#selection-details h2 {
+  margin-bottom: 8px;
+}
+
+#selection-details p {
+  margin: 6px 0;
+}
+
 #data-panel.collapsed #data-content,
 #properties-panel.collapsed #props-content {
   visibility: hidden;

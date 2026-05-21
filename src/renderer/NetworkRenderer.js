@@ -14,6 +14,7 @@ const DEFAULT_OPTIONS = Object.freeze({
     width: 1.5,
     labelColor: "#333333",
     showLabels: true,
+    displayMode: "labels",
   },
   vertices: {
     defaultColor: "#999999",
