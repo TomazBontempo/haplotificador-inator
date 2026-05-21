@@ -593,3 +593,66 @@ progress.indeterminate {
 #toolbar #sitemask-ok:hover {
   background: #d4920a;
 }
+
+.unsaved-dialog {
+  max-width: 420px;
+  padding: 20px 24px;
+  text-align: center;
+}
+
+.unsaved-dialog p {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  color: #333;
+  white-space: pre-line;
+}
+
+#unsaved-save,
+#toolbar #unsaved-save {
+  background: #0066cc;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+#unsaved-save:hover,
+#toolbar #unsaved-save:hover {
+  background: #0052a3;
+}
+
+#unsaved-discard,
+#toolbar #unsaved-discard {
+  background: #e0e0e0;
+  color: #333;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+#unsaved-discard:hover,
+#toolbar #unsaved-discard:hover {
+  background: #cccccc;
+}
+
+#unsaved-cancel,
+#toolbar #unsaved-cancel {
+  background: #e0e0e0;
+  color: #333;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#unsaved-cancel:hover,
+#toolbar #unsaved-cancel:hover {
+  background: #cccccc;
+}

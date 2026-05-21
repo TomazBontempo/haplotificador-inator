@@ -44,6 +44,7 @@ let movedVertexIndices = new Set();
 let suppressNextSvgClick = false;
 let isResizingData = false;
 let isResizingProps = false;
+let panChanged = false;
 let resizeStartX = 0;
 let resizeStartXProps = 0;
 let resizeStartWidth = DEFAULT_PANEL_WIDTH;
@@ -176,6 +177,18 @@ function appShell() {
               <p>More than 5% of sites contain undefined states and will be masked.<br>Sequences with high undefined states will not be removed.</p>
               <div class="modal-actions">
                 <button id="sitemask-ok">OK</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="unsaved-modal" class="hidden">
+          <div class="modal-overlay">
+            <div class="modal-dialog unsaved-dialog">
+              <p id="unsaved-message"></p>
+              <div class="modal-actions">
+                <button id="unsaved-save">Save as</button>
+                <button id="unsaved-discard">Discard</button>
+                <button id="unsaved-cancel">Cancel</button>
               </div>
             </div>
           </div>
@@ -430,9 +443,7 @@ export async function save() {
   }
   await storage.autoSave(saveState);
 
-  state.lastSaved = new Date();
-  state.saveStatus = "Saved";
-  state.hasUnsavedChanges = false;
+  markSaved();
   syncStatusBar();
 }
 
@@ -443,13 +454,17 @@ export async function saveAsProject() {
   if (fileHandle) {
     state.saveHandle = fileHandle;
     await storage.autoSave(buildSaveState());
-    state.lastSaved = new Date();
-    state.saveStatus = "Saved";
-    state.hasUnsavedChanges = false;
+    markSaved();
     syncStatusBar();
   }
 
   return fileHandle;
+}
+
+function markSaved(status = "Saved") {
+  state.lastSaved = new Date();
+  state.saveStatus = status;
+  state.hasUnsavedChanges = false;
 }
 
 function clampZoom(value) {
@@ -459,6 +474,7 @@ function clampZoom(value) {
 function setZoom(value) {
   state.visualOptions.zoom = clampZoom(value);
   applyViewportTransform();
+  markVisualChange();
 }
 
 function zoomIn() {
@@ -537,6 +553,7 @@ function zoomFit() {
   state.visualOptions.panX = (width - bounds.width * zoom) / 2 - bounds.minX * zoom;
   state.visualOptions.panY = (height - bounds.height * zoom) / 2 - bounds.minY * zoom;
   applyViewportTransform();
+  markVisualChange();
 }
 
 function applyViewportTransform() {
@@ -630,6 +647,79 @@ function showSiteMaskWarning() {
     setHidden(modal, false);
     okButton.focus();
   });
+}
+
+function showUnsavedChangesWarning(filename) {
+  return new Promise((resolve) => {
+    const modal = byId("unsaved-modal");
+    const message = byId("unsaved-message");
+    const saveButton = byId("unsaved-save");
+    const discardButton = byId("unsaved-discard");
+    const cancelButton = byId("unsaved-cancel");
+
+    if (!modal || !message || !saveButton || !discardButton || !cancelButton) {
+      resolve("cancel");
+      return;
+    }
+
+    let resolved = false;
+    const cleanup = (event, result) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      saveButton.removeEventListener("click", save);
+      discardButton.removeEventListener("click", discard);
+      cancelButton.removeEventListener("click", cancel);
+      setHidden(modal, true);
+      blurClickedControl(event);
+      resolve(result);
+    };
+    const save = (event) => cleanup(event, "save");
+    const discard = (event) => cleanup(event, "discard");
+    const cancel = (event) => cleanup(event, "cancel");
+
+    message.textContent = `You have unsaved changes in ${filename}.\nWhat would you like to do?`;
+    saveButton.addEventListener("click", save);
+    discardButton.addEventListener("click", discard);
+    cancelButton.addEventListener("click", cancel);
+    setHidden(modal, false);
+    saveButton.focus();
+  });
+}
+
+async function checkUnsavedChanges() {
+  if (!state.hasUnsavedChanges) {
+    return "proceed";
+  }
+
+  const filename = state.currentFile?.name ?? "current project";
+  const result = await showUnsavedChangesWarning(filename);
+  if (result === "save") {
+    const storage = await getStorageModule();
+    if (state.saveHandle) {
+      await storage.saveToHandle(state.saveHandle, buildSaveState());
+      markSaved();
+      syncStatusBar();
+      return "proceed";
+    }
+
+    const handle = await storage.saveAs(buildSaveState());
+    if (!handle) {
+      return "cancel";
+    }
+
+    state.saveHandle = handle;
+    await storage.autoSave(buildSaveState());
+    markSaved();
+    syncStatusBar();
+    return "proceed";
+  }
+  if (result === "discard") {
+    return "proceed";
+  }
+
+  return "cancel";
 }
 
 function clearElement(element) {
@@ -927,6 +1017,12 @@ function markUnsavedChanges() {
   syncStatusBar();
 }
 
+function markVisualChange() {
+  if (state.graph) {
+    markUnsavedChanges();
+  }
+}
+
 export async function runCurrentPipeline() {
   if (!state.currentFile) {
     showMessage("Open a .nex file before running an algorithm.");
@@ -997,10 +1093,6 @@ async function handleNexusFileSelected(file) {
   try {
     const storage = await getStorageModule();
     if (await storage.hasAutoSave()) {
-      const confirmed = window.confirm("Starting a new project will clear your current saves. Continue?");
-      if (!confirmed) {
-        return;
-      }
       await storage.clearAutoSave();
     }
   } catch (error) {
@@ -1072,13 +1164,9 @@ function applySavedState(savedState, status = "Saved") {
 
 async function loadSavedProject() {
   try {
-    if (state.graph) {
-      const saveFirst = window.confirm("You have unsaved changes. Save before continuing?");
-      if (saveFirst) {
-        await save();
-      } else if (!window.confirm("Discard current state and continue?")) {
-        return;
-      }
+    const check = await checkUnsavedChanges();
+    if (check === "cancel") {
+      return;
     }
 
     const storage = await getStorageModule();
@@ -1482,10 +1570,25 @@ function wireFileInputs() {
   const nexInput = byId("nex-file-input");
   const hapnetInput = byId("hapnet-file-input");
 
-  byId("open-nex")?.addEventListener("click", (event) => {
+  byId("open-nex")?.addEventListener("click", async (event) => {
     closeFileMenu();
-    nexInput?.click();
     blurClickedControl(event);
+
+    try {
+      const check = await checkUnsavedChanges();
+      if (check === "cancel") {
+        return;
+      }
+    } catch (error) {
+      showMessage(`Failed to save current project: ${error.message}`);
+      syncStatusBar();
+      return;
+    }
+
+    if (nexInput) {
+      nexInput.value = "";
+    }
+    nexInput?.click();
   });
   byId("open-hapnet")?.addEventListener("click", (event) => {
     closeFileMenu();
@@ -1775,6 +1878,7 @@ function wireResizeObserver() {
 function beginPan(event, middleButton = false) {
   isPanning = true;
   isMiddleButtonPanning = middleButton;
+  panChanged = false;
   lastPointer = { x: event.clientX, y: event.clientY };
   byId("viewport")?.classList.add("panning");
 }
@@ -1782,6 +1886,7 @@ function beginPan(event, middleButton = false) {
 function endPan() {
   isPanning = false;
   isMiddleButtonPanning = false;
+  panChanged = false;
   byId("viewport")?.classList.toggle("panning", spacePanMode);
 }
 
@@ -1840,6 +1945,9 @@ function wireViewportInteractions() {
       const delta = screenDeltaToViewportDelta(dx, dy);
       state.visualOptions.panX += delta.x;
       state.visualOptions.panY += delta.y;
+      if (delta.x !== 0 || delta.y !== 0) {
+        panChanged = true;
+      }
       applyViewportTransform();
     } else if (isRubberBanding) {
       event.preventDefault();
@@ -1871,6 +1979,9 @@ function wireViewportInteractions() {
     isDraggingNodes = false;
     lastPointer = null;
     if (isPanning || isMiddleButtonPanning) {
+      if (panChanged) {
+        markVisualChange();
+      }
       endPan();
     }
   });
