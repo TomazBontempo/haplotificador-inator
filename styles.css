@@ -68,6 +68,44 @@ body {
   cursor: not-allowed;
 }
 
+#toolbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 16px;
+}
+
+#toolbar .toggle-btn {
+  min-width: 82px;
+  height: 28px;
+  padding: 4px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  background: transparent;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#toolbar .toggle-btn.active {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+#toolbar .toggle-btn:not(.active) {
+  opacity: 0.5;
+}
+
+#toolbar .toggle-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+#toolbar .toggle-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .menu-wrapper {
   position: relative;
   height: 100%;
@@ -590,6 +628,10 @@ progress.indeterminate {
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.labels-hidden .vertex-label {
+  display: none;
 }
 
 .edge.selected line {

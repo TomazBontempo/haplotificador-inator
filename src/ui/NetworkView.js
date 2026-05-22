@@ -100,6 +100,8 @@ function createInitialState() {
       zoom: 1,
       panX: 0,
       panY: 0,
+      showLabels: true,
+      showLegend: true,
       legendPosition: null,
       labelOffsets: {},
     },
@@ -230,6 +232,14 @@ function appShell() {
         <button id="export-btn" type="button">Export</button>
         <button id="undo-btn" type="button" title="Undo (Ctrl+Z)" disabled>↩</button>
         <button id="redo-btn" type="button" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
+        <div id="toolbar-right">
+          <button id="toggle-labels" class="toggle-btn active" title="Show/hide node labels">
+            👁 Labels
+          </button>
+          <button id="toggle-legend" class="toggle-btn active" title="Show/hide legend">
+            👁 Legend
+          </button>
+        </div>
         <input id="open-file-input" class="hidden" type="file" accept=".nex,.hapnet">
         <div id="algorithm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="algorithm-title">
           <div class="modal-dialog">
@@ -1158,11 +1168,67 @@ function rerenderNetwork() {
   };
   const svg = dependencies.renderNetwork(state.graph, renderOptions);
   container?.replaceChildren(svg);
+  applyVisualVisibilityState(svg);
   applyViewportTransform();
   wireLabelInteractions(svg);
   wireSvgInteractions(svg);
   wireLegendInteractions(svg);
   return svg;
+}
+
+function syncToggleButton(button, active, disabled = false) {
+  if (!button) {
+    return;
+  }
+
+  button.classList.toggle("active", active);
+  button.disabled = disabled;
+  button.setAttribute("aria-pressed", active ? "true" : "false");
+}
+
+function applyVisualVisibilityState(svg = currentSvg()) {
+  const showLabels = state.visualOptions.showLabels !== false;
+  const showLegend = state.visualOptions.showLegend !== false;
+  const labelsButton = byId("toggle-labels");
+  const legendButton = byId("toggle-legend");
+
+  svg?.classList.toggle("labels-hidden", !showLabels);
+  syncToggleButton(labelsButton, showLabels);
+
+  const legend = svg?.querySelector("#network-legend") ?? null;
+  if (!legend) {
+    syncToggleButton(legendButton, showLegend, true);
+    return;
+  }
+
+  if (showLegend) {
+    legend.style.removeProperty("display");
+  } else {
+    legend.style.display = "none";
+  }
+  syncToggleButton(legendButton, showLegend);
+}
+
+function toggleLabels(event) {
+  state.visualOptions.showLabels = !(state.visualOptions.showLabels !== false);
+  applyVisualVisibilityState();
+  blurClickedControl(event);
+  markVisualChange();
+}
+
+function toggleLegend(event) {
+  const svg = currentSvg();
+  const legend = svg?.querySelector("#network-legend") ?? null;
+  if (!legend) {
+    applyVisualVisibilityState(svg);
+    blurClickedControl(event);
+    return;
+  }
+
+  state.visualOptions.showLegend = !(state.visualOptions.showLegend !== false);
+  applyVisualVisibilityState(svg);
+  blurClickedControl(event);
+  markVisualChange();
 }
 
 function varyHexLightness(hex, step) {
@@ -1450,6 +1516,7 @@ function syncVisualsPanel() {
   }
 
   updateTraitColorPickers();
+  applyVisualVisibilityState();
 }
 
 function initVisualsPanel() {
@@ -2517,6 +2584,8 @@ function wireToolbar() {
     redo();
     blurClickedControl(event);
   });
+  byId("toggle-labels")?.addEventListener("click", toggleLabels);
+  byId("toggle-legend")?.addEventListener("click", toggleLegend);
 }
 
 function wirePanels() {
