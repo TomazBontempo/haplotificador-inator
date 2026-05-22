@@ -117,6 +117,7 @@ function createInitialState() {
     propsPanelCollapsed: false,
     selectedElements: [],
     maskedSites: 0,
+    maskedSiteIndices: [],
     saveHandle: null,
     lastSaved: null,
     saveStatus: null,
@@ -580,6 +581,47 @@ function filenameBase() {
   return filename.replace(/\.[^.]*$/, "") || "network";
 }
 
+function maskedSiteIndicesFromMask(mask) {
+  if (!Array.isArray(mask)) {
+    return [];
+  }
+
+  const indices = [];
+  mask.forEach((keepSite, index) => {
+    if (!keepSite) {
+      indices.push(index);
+    }
+  });
+  return indices;
+}
+
+function normalizeMaskedSiteIndices(indices) {
+  if (!Array.isArray(indices)) {
+    return [];
+  }
+
+  return indices.filter((index) => Number.isInteger(index) && index >= 0);
+}
+
+function restoreMaskedSiteIndices(savedState) {
+  const savedIndices = normalizeMaskedSiteIndices(savedState.maskedSiteIndices);
+  if (savedIndices.length > 0 || Array.isArray(savedState.maskedSiteIndices)) {
+    return savedIndices;
+  }
+
+  if (!savedState.parsedNexus) {
+    return [];
+  }
+
+  try {
+    const { mask } = dependencies.applyUndefinedSiteMask(savedState.parsedNexus);
+    return maskedSiteIndicesFromMask(mask);
+  } catch (error) {
+    console.warn(error);
+    return [];
+  }
+}
+
 export function buildSaveState() {
   return {
     version: 1,
@@ -594,6 +636,7 @@ export function buildSaveState() {
     visual: JSON.parse(JSON.stringify(state.visualOptions)),
     visualOptions: JSON.parse(JSON.stringify(state.visualOptions)),
     maskedSites: state.maskedSites,
+    maskedSiteIndices: [...state.maskedSiteIndices],
     hapNet: state.hapNet
       ? {
           nseqs: state.hapNet.nseqs,
@@ -1053,8 +1096,12 @@ function buildTraitsTab(container, traits, taxa) {
   container.appendChild(tree);
 }
 
-function nucleotideClass(char) {
-  switch (String(char).toUpperCase()) {
+function getNucClass(base, positionIndex, maskedIndices) {
+  if (maskedIndices && maskedIndices.includes(positionIndex)) {
+    return "nuc-gap";
+  }
+
+  switch (String(base).toUpperCase()) {
     case "A":
       return "nuc-a";
     case "T":
@@ -1069,7 +1116,7 @@ function nucleotideClass(char) {
   }
 }
 
-function buildAlignmentTab(container, characters, taxa) {
+function buildAlignmentTab(container, characters, taxa, maskedSiteIndices = []) {
   clearElement(container);
 
   if (!characters?.matrix) {
@@ -1108,9 +1155,11 @@ function buildAlignmentTab(container, characters, taxa) {
 
     const sequenceCell = document.createElement("div");
     sequenceCell.className = "alignment-sequence-cell";
-    for (const char of String(matrix[name]).toUpperCase()) {
+    const sequence = String(matrix[name]).toUpperCase();
+    for (let i = 0; i < sequence.length; i += 1) {
+      const char = sequence[i];
       const span = document.createElement("span");
-      span.className = nucleotideClass(char);
+      span.className = getNucClass(char, i, maskedSiteIndices);
       span.textContent = char;
       sequenceCell.appendChild(span);
     }
@@ -1160,6 +1209,7 @@ export function updateDataView() {
     alignmentContent,
     state.parsedNexus.characters,
     state.parsedNexus.taxa,
+    state.maskedSiteIndices,
   );
   activateDataTab("traits");
 }
@@ -1719,6 +1769,7 @@ export async function runCurrentPipeline() {
 
     const { mask, masked } = dependencies.applyUndefinedSiteMask(parsed);
     state.maskedSites = masked;
+    state.maskedSiteIndices = maskedSiteIndicesFromMask(mask);
     syncStatusBar();
 
     setProgressStage(2, "Building model");
@@ -1791,6 +1842,7 @@ async function handleNexusFileSelected(file) {
   state.visualOptions.labelOffsets = {};
   syncVisualsPanel();
   state.maskedSites = 0;
+  state.maskedSiteIndices = [];
   state.saveHandle = null;
   state.lastSaved = null;
   state.saveStatus = "Unsaved changes";
@@ -1799,8 +1851,9 @@ async function handleNexusFileSelected(file) {
     const text = await readFileText(file);
     const parsed = dependencies.parseNexus(text);
     state.parsedNexus = parsed;
-    const { masked } = dependencies.applyUndefinedSiteMask(parsed);
+    const { mask, masked } = dependencies.applyUndefinedSiteMask(parsed);
     state.maskedSites = masked;
+    state.maskedSiteIndices = maskedSiteIndicesFromMask(mask);
     syncStatusBar();
     if (masked > 0) {
       await showSiteMaskWarning();
@@ -1932,6 +1985,7 @@ function applySavedState(savedState, status = "Saved") {
     savedState.visualOptions ?? savedState.visual ?? {},
   );
   state.maskedSites = savedState.maskedSites ?? 0;
+  state.maskedSiteIndices = restoreMaskedSiteIndices(savedState);
   state.parsedNexus = savedState.parsedNexus ?? null;
   state.graph = reconstructGraph(savedState.graph);
   clearHistory();
