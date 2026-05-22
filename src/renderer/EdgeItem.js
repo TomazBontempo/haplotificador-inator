@@ -2,7 +2,6 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_EDGE_COLOR = "#666666";
 const DEFAULT_EDGE_WIDTH = 1.5;
 const DEFAULT_LABEL_COLOR = "#333333";
-const LABEL_OFFSET = 10;
 const TICK_LENGTH = 5;
 const TICK_SPACING = 6;
 
@@ -72,10 +71,12 @@ export function renderEdgeItem(edge, options = {}) {
   if (displayMode === "labels" && showEdgeLabels && weight > 1) {
     const midX = (fromX + toX) / 2;
     const midY = (fromY + toY) / 2;
+    const offsetFontSize = options.fontSize ?? 12;
+    const offsetDistance = offsetFontSize / 2 + 4;
     const label = createSvgElement("text");
     label.textContent = String(weight);
-    label.setAttribute("x", String(midX + perpX * LABEL_OFFSET));
-    label.setAttribute("y", String(midY + perpY * LABEL_OFFSET));
+    label.setAttribute("x", String(midX + perpX * offsetDistance));
+    label.setAttribute("y", String(midY + perpY * offsetDistance));
     label.setAttribute("text-anchor", "middle");
     label.setAttribute("dominant-baseline", "middle");
     label.setAttribute("font-size", String(fontSize));
