@@ -21,9 +21,12 @@ const defaultDependencies = {
   HapNet,
   Graph,
   renderNetwork,
-  exportSVG: async (...args) => (await import("../export/Exporter.js")).exportSVG(...args),
-  exportPNG: async (...args) => (await import("../export/Exporter.js")).exportPNG(...args),
-  exportPDF: async (...args) => (await import("../export/Exporter.js")).exportPDF(...args),
+  exportSVG: async (...args) =>
+    (await import("../export/Exporter.js")).exportSVG(...args),
+  exportPNG: async (...args) =>
+    (await import("../export/Exporter.js")).exportPNG(...args),
+  exportPDF: async (...args) =>
+    (await import("../export/Exporter.js")).exportPDF(...args),
   WorkerClass: typeof Worker === "undefined" ? null : Worker,
 };
 
@@ -87,7 +90,11 @@ function createInitialState() {
         showLabels: true,
         displayMode: "labels",
       },
-      vertices: { defaultColor: "#999999", inferredColor: "#333333", traitColors: [] },
+      vertices: {
+        defaultColor: "#999999",
+        inferredColor: "#333333",
+        traitColors: [],
+      },
       baseRadius: 10,
       fontSize: 12,
       zoom: 1,
@@ -422,7 +429,8 @@ function readFileText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Failed to read file."));
     reader.readAsText(file);
   });
 }
@@ -457,15 +465,24 @@ function serializeGraph(graph) {
 }
 
 function reconstructGraph(graphJSON) {
-  if (!graphJSON || !Array.isArray(graphJSON.vertices) || !Array.isArray(graphJSON.edges)) {
+  if (
+    !graphJSON ||
+    !Array.isArray(graphJSON.vertices) ||
+    !Array.isArray(graphJSON.edges)
+  ) {
     return null;
   }
 
   const graph = new dependencies.Graph();
-  const vertices = [...graphJSON.vertices].sort((left, right) => left.index - right.index);
+  const vertices = [...graphJSON.vertices].sort(
+    (left, right) => left.index - right.index,
+  );
 
   for (const vertexJSON of vertices) {
-    const vertex = graph.addVertex(vertexJSON.label ?? "", vertexJSON.info ?? null);
+    const vertex = graph.addVertex(
+      vertexJSON.label ?? "",
+      vertexJSON.info ?? null,
+    );
     vertex.colour = vertexJSON.colour ?? vertex.colour;
     vertex.marked = Boolean(vertexJSON.marked);
     if (Number.isFinite(vertexJSON.x)) {
@@ -479,7 +496,9 @@ function reconstructGraph(graphJSON) {
     }
   }
 
-  const edges = [...graphJSON.edges].sort((left, right) => left.index - right.index);
+  const edges = [...graphJSON.edges].sort(
+    (left, right) => left.index - right.index,
+  );
   for (const edgeJSON of edges) {
     const edge = graph.addEdge(
       graph.vertex(edgeJSON.from),
@@ -504,17 +523,21 @@ export function buildSaveState() {
     version: 1,
     savedAt: new Date().toISOString(),
     originalFilename: state.currentFile?.name ?? null,
-    parsedNexus: state.parsedNexus ? JSON.parse(JSON.stringify(state.parsedNexus)) : null,
+    parsedNexus: state.parsedNexus
+      ? JSON.parse(JSON.stringify(state.parsedNexus))
+      : null,
     algorithm: state.algorithm,
     algorithmParams: { ...state.algorithmParams },
     graph: serializeGraph(state.graph),
     visual: JSON.parse(JSON.stringify(state.visualOptions)),
     visualOptions: JSON.parse(JSON.stringify(state.visualOptions)),
     maskedSites: state.maskedSites,
-    hapNet: state.hapNet ? {
-      nseqs: state.hapNet.nseqs,
-      traitNames: [...(state.hapNet.traitNames ?? [])],
-    } : null,
+    hapNet: state.hapNet
+      ? {
+          nseqs: state.hapNet.nseqs,
+          traitNames: [...(state.hapNet.traitNames ?? [])],
+        }
+      : null,
   };
 }
 
@@ -595,7 +618,10 @@ function vertexRadiusForFit(vertex) {
 
   const frequency = Number(vertex.info?.frequency ?? vertex.info?.freq ?? 1);
   const baseRadius = Number(state.visualOptions.baseRadius ?? 10);
-  return baseRadius * Math.sqrt(Math.max(0, Number.isFinite(frequency) ? frequency : 1));
+  return (
+    baseRadius *
+    Math.sqrt(Math.max(0, Number.isFinite(frequency) ? frequency : 1))
+  );
 }
 
 function graphVertexBounds() {
@@ -646,14 +672,20 @@ function zoomFit() {
   const paddingY = height * 0.05;
   const innerWidth = Math.max(1, width - paddingX * 2);
   const innerHeight = Math.max(1, height - paddingY * 2);
-  const scaleX = bounds.width > 0 ? innerWidth / bounds.width : Number.POSITIVE_INFINITY;
-  const scaleY = bounds.height > 0 ? innerHeight / bounds.height : Number.POSITIVE_INFINITY;
-  const scale = Number.isFinite(Math.min(scaleX, scaleY)) ? Math.min(scaleX, scaleY) : 1;
+  const scaleX =
+    bounds.width > 0 ? innerWidth / bounds.width : Number.POSITIVE_INFINITY;
+  const scaleY =
+    bounds.height > 0 ? innerHeight / bounds.height : Number.POSITIVE_INFINITY;
+  const scale = Number.isFinite(Math.min(scaleX, scaleY))
+    ? Math.min(scaleX, scaleY)
+    : 1;
   const zoom = clampZoom(scale);
 
   state.visualOptions.zoom = zoom;
-  state.visualOptions.panX = (width - bounds.width * zoom) / 2 - bounds.minX * zoom;
-  state.visualOptions.panY = (height - bounds.height * zoom) / 2 - bounds.minY * zoom;
+  state.visualOptions.panX =
+    (width - bounds.width * zoom) / 2 - bounds.minX * zoom;
+  state.visualOptions.panY =
+    (height - bounds.height * zoom) / 2 - bounds.minY * zoom;
   applyViewportTransform();
   markVisualChange();
 }
@@ -667,7 +699,10 @@ function applyViewportTransform() {
   const { zoom, panX, panY } = state.visualOptions;
   const viewportGroup = svg.querySelector("g.viewport");
   if (viewportGroup) {
-    viewportGroup.setAttribute("transform", `translate(${panX}, ${panY}) scale(${zoom})`);
+    viewportGroup.setAttribute(
+      "transform",
+      `translate(${panX}, ${panY}) scale(${zoom})`,
+    );
   }
 }
 
@@ -711,8 +746,12 @@ function syncStatusBar() {
   const filename = state.currentFile?.name ?? "No file loaded";
   byId("status-filename").textContent = filename;
   byId("status-algorithm").textContent = state.graph ? state.algorithm : "—";
-  byId("status-haplotypes").textContent = Number.isFinite(state.hapNet?.nseqs) ? String(state.hapNet.nseqs) : "—";
-  byId("status-edges").textContent = Array.isArray(state.graph?.edges) ? String(state.graph.edges.length) : "—";
+  byId("status-haplotypes").textContent = Number.isFinite(state.hapNet?.nseqs)
+    ? String(state.hapNet.nseqs)
+    : "—";
+  byId("status-edges").textContent = Array.isArray(state.graph?.edges)
+    ? String(state.graph.edges.length)
+    : "—";
   let saveStatusText = state.saveStatus ?? "—";
   if (state.hasUnsavedChanges) {
     saveStatusText = "Unsaved changes";
@@ -859,7 +898,10 @@ function createTraitRow({ label, sequenceCount, sampleCount, children }) {
   toggle.disabled = children.length === 0;
 
   const name = createDataCell("trait-name", label);
-  const sequence = createDataCell("trait-count", `(${sequenceCount} sequences)`);
+  const sequence = createDataCell(
+    "trait-count",
+    `(${sequenceCount} sequences)`,
+  );
   const sample = createDataCell("trait-count", `(${sampleCount} samples)`);
 
   row.append(toggle, name, sequence, sample);
@@ -883,7 +925,9 @@ function createTraitRow({ label, sequenceCount, sampleCount, children }) {
     const expanded = toggle.getAttribute("aria-expanded") === "true";
     toggle.setAttribute("aria-expanded", String(!expanded));
     toggle.textContent = expanded ? "+" : "-";
-    childRows.forEach((childRow) => childRow.classList.toggle("hidden", expanded));
+    childRows.forEach((childRow) =>
+      childRow.classList.toggle("hidden", expanded),
+    );
   });
 
   return [row, ...childRows];
@@ -899,7 +943,10 @@ function buildTraitsTab(container, traits, taxa) {
 
   const labels = traits.labels?.length
     ? traits.labels
-    : Array.from({ length: traits.ntraits ?? 0 }, (_, index) => `Trait ${index + 1}`);
+    : Array.from(
+        { length: traits.ntraits ?? 0 },
+        (_, index) => `Trait ${index + 1}`,
+      );
   const matrix = traits.matrix ?? {};
   const names = taxa?.length ? taxa : Object.keys(matrix);
 
@@ -916,8 +963,8 @@ function buildTraitsTab(container, traits, taxa) {
   header.append(
     createDataCell("trait-toggle-header", ""),
     createDataCell("trait-name", "Trait name"),
-    createDataCell("trait-count", "Sequence count"),
-    createDataCell("trait-count", "Sample count"),
+    createDataCell("trait-count", "Sequences"),
+    createDataCell("trait-count", "Samples"),
   );
   tree.appendChild(header);
 
@@ -933,12 +980,14 @@ function buildTraitsTab(container, traits, taxa) {
       }
     }
 
-    tree.append(...createTraitRow({
-      label,
-      sequenceCount: children.length,
-      sampleCount,
-      children,
-    }));
+    tree.append(
+      ...createTraitRow({
+        label,
+        sequenceCount: children.length,
+        sampleCount,
+        children,
+      }),
+    );
   });
 
   container.appendChild(tree);
@@ -1042,8 +1091,16 @@ export function updateDataView() {
     return;
   }
 
-  buildTraitsTab(traitsContent, state.parsedNexus.traits, state.parsedNexus.taxa);
-  buildAlignmentTab(alignmentContent, state.parsedNexus.characters, state.parsedNexus.taxa);
+  buildTraitsTab(
+    traitsContent,
+    state.parsedNexus.traits,
+    state.parsedNexus.taxa,
+  );
+  buildAlignmentTab(
+    alignmentContent,
+    state.parsedNexus.characters,
+    state.parsedNexus.taxa,
+  );
   activateDataTab("traits");
 }
 
@@ -1051,7 +1108,9 @@ function createModuleWorker(relativePath) {
   if (!dependencies.WorkerClass) {
     throw new Error("Web Workers are not supported in this browser.");
   }
-  return new dependencies.WorkerClass(new URL(relativePath, import.meta.url), { type: "module" });
+  return new dependencies.WorkerClass(new URL(relativePath, import.meta.url), {
+    type: "module",
+  });
 }
 
 function terminateWorkers() {
@@ -1112,7 +1171,7 @@ function varyHexLightness(hex, step) {
     return hex;
   }
 
-  const amount = Math.min(0.45, 0.16 + (Math.floor((step - 1) / 2) * 0.08));
+  const amount = Math.min(0.45, 0.16 + Math.floor((step - 1) / 2) * 0.08);
   const target = step % 2 === 0 ? 0 : 255;
   const channels = match.slice(1).map((channel) => {
     const value = Number.parseInt(channel, 16);
@@ -1146,7 +1205,9 @@ function colorForTraitIndex(index, traitCount) {
 function assignTraitColors(hapNet) {
   const traitCount = hapNet?.traitNames?.length ?? 0;
   const vertices = state.visualOptions.vertices ?? {};
-  const existing = Array.isArray(vertices.traitColors) ? vertices.traitColors : [];
+  const existing = Array.isArray(vertices.traitColors)
+    ? vertices.traitColors
+    : [];
 
   if (existing.length === traitCount) {
     return;
@@ -1154,9 +1215,8 @@ function assignTraitColors(hapNet) {
 
   state.visualOptions.vertices = {
     ...vertices,
-    traitColors: Array.from(
-      { length: traitCount },
-      (_, index) => colorForTraitIndex(index, traitCount),
+    traitColors: Array.from({ length: traitCount }, (_, index) =>
+      colorForTraitIndex(index, traitCount),
     ),
   };
 }
@@ -1247,7 +1307,9 @@ function restoreSnapshot(snapshot) {
   }
 
   for (const entry of snapshot.vertexPositions) {
-    const vertex = state.graph.vertices.find((candidate) => candidate.index === entry.index);
+    const vertex = state.graph.vertices.find(
+      (candidate) => candidate.index === entry.index,
+    );
     if (vertex) {
       vertex.x = entry.x;
       vertex.y = entry.y;
@@ -1293,7 +1355,9 @@ function redo() {
 }
 
 function edgeDisplayMode() {
-  return state.visualOptions.edges?.displayMode === "ticks" ? "ticks" : "labels";
+  return state.visualOptions.edges?.displayMode === "ticks"
+    ? "ticks"
+    : "labels";
 }
 
 function updateTraitColorPickers() {
@@ -1325,7 +1389,8 @@ function updateTraitColorPickers() {
     const input = document.createElement("input");
     input.type = "color";
     input.id = `visual-trait-color-${index}`;
-    input.value = traitColors[index] ?? colorForTraitIndex(index, traitNames.length);
+    input.value =
+      traitColors[index] ?? colorForTraitIndex(index, traitNames.length);
     if (!traitColors[index]) {
       state.visualOptions.vertices.traitColors[index] = input.value;
     }
@@ -1349,7 +1414,9 @@ function updateTraitColorPickers() {
 
 function syncVisualsPanel() {
   const visualOptions = state.visualOptions;
-  visualOptions.labelOffsets = normalizeLabelOffsets(visualOptions.labelOffsets);
+  visualOptions.labelOffsets = normalizeLabelOffsets(
+    visualOptions.labelOffsets,
+  );
   const edgeColor = byId("visual-edge-color");
   const edgeWidth = byId("visual-edge-width");
   const edgeWidthValue = byId("visual-edge-width-value");
@@ -1469,7 +1536,10 @@ function initVisualsPanel() {
 }
 
 function setEdgeDisplayMode(displayMode) {
-  if (!["labels", "ticks"].includes(displayMode) || displayMode === edgeDisplayMode()) {
+  if (
+    !["labels", "ticks"].includes(displayMode) ||
+    displayMode === edgeDisplayMode()
+  ) {
     return;
   }
 
@@ -1596,7 +1666,9 @@ async function handleNexusFileSelected(file) {
     state.parsedNexus = null;
     clearElement(byId("tab-content-traits"));
     clearElement(byId("tab-content-alignment"));
-    byId("tab-content-traits")?.appendChild(dataPlaceholder("Open a .nex file to see data"));
+    byId("tab-content-traits")?.appendChild(
+      dataPlaceholder("Open a .nex file to see data"),
+    );
     activateDataTab("traits");
     showMessage(`Failed to parse file: ${error.message}`);
     syncStatusBar();
@@ -1638,13 +1710,17 @@ function handleOpenFileSelected(file) {
 }
 
 function sampledVertexCount(graph) {
-  return graph?.vertices?.filter((vertex) => vertex.info?.sampled !== false).length ?? 0;
+  return (
+    graph?.vertices?.filter((vertex) => vertex.info?.sampled !== false)
+      .length ?? 0
+  );
 }
 
 function savedHapNetSummary(savedState) {
-  const traitNames = savedState.hapNet?.traitNames
-    ?? savedState.parsedNexus?.traits?.labels
-    ?? [];
+  const traitNames =
+    savedState.hapNet?.traitNames ??
+    savedState.parsedNexus?.traits?.labels ??
+    [];
   if (savedState.hapNet) {
     return {
       ...savedState.hapNet,
@@ -1693,7 +1769,9 @@ function mergeVisualOptions(savedVisualOptions = {}) {
       ...state.visualOptions.vertices,
       ...(savedVisualOptions.vertices ?? {}),
     },
-    labelOffsets: normalizeLabelOffsets(savedVisualOptions.labelOffsets ?? state.visualOptions.labelOffsets),
+    labelOffsets: normalizeLabelOffsets(
+      savedVisualOptions.labelOffsets ?? state.visualOptions.labelOffsets,
+    ),
   };
 }
 
@@ -1706,7 +1784,9 @@ function applySavedState(savedState, status = "Saved") {
     ...state.algorithmParams,
     ...(savedState.algorithmParams ?? {}),
   };
-  state.visualOptions = mergeVisualOptions(savedState.visualOptions ?? savedState.visual ?? {});
+  state.visualOptions = mergeVisualOptions(
+    savedState.visualOptions ?? savedState.visual ?? {},
+  );
   state.maskedSites = savedState.maskedSites ?? 0;
   state.parsedNexus = savedState.parsedNexus ?? null;
   state.graph = reconstructGraph(savedState.graph);
@@ -1804,21 +1884,29 @@ function svgPoint(event) {
   const rect = svg.getBoundingClientRect();
   const scale = svgScreenScale();
   return {
-    x: ((event.clientX - rect.left) / scale.x - state.visualOptions.panX) / state.visualOptions.zoom,
-    y: ((event.clientY - rect.top) / scale.y - state.visualOptions.panY) / state.visualOptions.zoom,
+    x:
+      ((event.clientX - rect.left) / scale.x - state.visualOptions.panX) /
+      state.visualOptions.zoom,
+    y:
+      ((event.clientY - rect.top) / scale.y - state.visualOptions.panY) /
+      state.visualOptions.zoom,
   };
 }
 
 function clearSelection() {
-  currentSvg()?.querySelectorAll(".selected").forEach((element) => {
-    element.classList.remove("selected");
-  });
+  currentSvg()
+    ?.querySelectorAll(".selected")
+    .forEach((element) => {
+      element.classList.remove("selected");
+    });
   state.selectedElements = [];
   syncVisualsPanel();
 }
 
 function selectedVertexElements() {
-  return state.selectedElements.filter((element) => element.classList?.contains("vertex"));
+  return state.selectedElements.filter((element) =>
+    element.classList?.contains("vertex"),
+  );
 }
 
 function updatePropertiesPanel() {
@@ -1844,7 +1932,9 @@ function suppressUpcomingSvgClick() {
 }
 
 function updateEdgeElement(edge) {
-  const edgeElement = currentSvg()?.querySelector(`.edge[data-index="${edge.index}"]`);
+  const edgeElement = currentSvg()?.querySelector(
+    `.edge[data-index="${edge.index}"]`,
+  );
   if (!edgeElement) {
     return;
   }
@@ -1860,12 +1950,16 @@ function updateEdgeElement(edge) {
 }
 
 function vertexByIndex(index) {
-  return state.graph?.vertices?.find((vertex) => vertex.index === index) ?? null;
+  return (
+    state.graph?.vertices?.find((vertex) => vertex.index === index) ?? null
+  );
 }
 
 function svgTranslateCoordinates(element) {
   const transform = element.getAttribute("transform") ?? "";
-  const match = transform.match(/translate\(\s*([-+.\deE]+)(?:[\s,]+([-+.\deE]+))?\s*\)/);
+  const match = transform.match(
+    /translate\(\s*([-+.\deE]+)(?:[\s,]+([-+.\deE]+))?\s*\)/,
+  );
   if (!match) {
     return null;
   }
@@ -2034,7 +2128,9 @@ function finishLegendDrag() {
 
 function commitMovedVertexPositions() {
   for (const index of movedVertexIndices) {
-    const element = currentSvg()?.querySelector(`.vertex[data-index="${index}"]`);
+    const element = currentSvg()?.querySelector(
+      `.vertex[data-index="${index}"]`,
+    );
     const vertex = vertexByIndex(index);
     const coordinates = element ? svgTranslateCoordinates(element) : null;
     if (!vertex || !coordinates) {
@@ -2117,8 +2213,14 @@ function updateRubberBand(event) {
   const y = Math.min(rubberBandStart.y, point.y);
   rubberBandRect.setAttribute("x", String(x));
   rubberBandRect.setAttribute("y", String(y));
-  rubberBandRect.setAttribute("width", String(Math.abs(point.x - rubberBandStart.x)));
-  rubberBandRect.setAttribute("height", String(Math.abs(point.y - rubberBandStart.y)));
+  rubberBandRect.setAttribute(
+    "width",
+    String(Math.abs(point.x - rubberBandStart.x)),
+  );
+  rubberBandRect.setAttribute(
+    "height",
+    String(Math.abs(point.y - rubberBandStart.y)),
+  );
 }
 
 function finishRubberBand() {
@@ -2137,7 +2239,9 @@ function finishRubberBand() {
     const vx = vertex.x ?? 0;
     const vy = vertex.y ?? 0;
     if (vx >= x && vx <= x + width && vy >= y && vy <= y + height) {
-      const element = currentSvg()?.querySelector(`.vertex[data-index="${vertex.index}"]`);
+      const element = currentSvg()?.querySelector(
+        `.vertex[data-index="${vertex.index}"]`,
+      );
       if (element) {
         selectGraphElement(element, true);
       }
@@ -2263,7 +2367,9 @@ function renderAlgorithmParams() {
 }
 
 function openAlgorithmModal() {
-  const input = document.querySelector(`input[name="algorithm"][value="${state.algorithm}"]`);
+  const input = document.querySelector(
+    `input[name="algorithm"][value="${state.algorithm}"]`,
+  );
   if (input) {
     input.checked = true;
   }
@@ -2276,13 +2382,18 @@ function storeAlgorithmSelection() {
   state.algorithm = algorithm;
 
   if (algorithm === "MSN" || algorithm === "MJN") {
-    state.algorithmParams.epsilon = Number(byId("algorithm-epsilon")?.value ?? 0);
+    state.algorithmParams.epsilon = Number(
+      byId("algorithm-epsilon")?.value ?? 0,
+    );
   } else if (algorithm === "IntNJ") {
     state.algorithmParams.alpha = Number(byId("algorithm-alpha")?.value ?? 0.5);
   }
 
   setHidden(byId("algorithm-modal"), true);
-  if (state.currentFile?.name?.toLowerCase().endsWith(".nex") || state.currentFile?.name?.toLowerCase().endsWith(".nexus")) {
+  if (
+    state.currentFile?.name?.toLowerCase().endsWith(".nex") ||
+    state.currentFile?.name?.toLowerCase().endsWith(".nexus")
+  ) {
     runCurrentPipeline();
   }
 }
@@ -2297,7 +2408,9 @@ async function exportCurrentNetwork() {
     return;
   }
 
-  const format = document.querySelector('input[name="export-format"]:checked')?.value ?? "PNG";
+  const format =
+    document.querySelector('input[name="export-format"]:checked')?.value ??
+    "PNG";
   const exportOptions = {
     filename: filenameBase(),
     width: Number(byId("export-width")?.value ?? 2000),
@@ -2597,7 +2710,11 @@ function wireZoomControls() {
 
 function wireResizeObserver() {
   const container = byId("svg-container");
-  if (!container || typeof ResizeObserver === "undefined" || svgContainerResizeObserver) {
+  if (
+    !container ||
+    typeof ResizeObserver === "undefined" ||
+    svgContainerResizeObserver
+  ) {
     return;
   }
 
@@ -2628,13 +2745,19 @@ function wireViewportInteractions() {
     return;
   }
 
-  viewport.addEventListener("wheel", (event) => {
-    if (!event.ctrlKey) {
-      return;
-    }
-    event.preventDefault();
-    setZoom(state.visualOptions.zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
-  }, { passive: false });
+  viewport.addEventListener(
+    "wheel",
+    (event) => {
+      if (!event.ctrlKey) {
+        return;
+      }
+      event.preventDefault();
+      setZoom(
+        state.visualOptions.zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP),
+      );
+    },
+    { passive: false },
+  );
 
   viewport.addEventListener("mousedown", (event) => {
     if (event.button === 1) {
@@ -2674,7 +2797,10 @@ function wireViewportInteractions() {
         pushUndoSnapshot("drag");
         isDraggingNodes = true;
         if (!pendingVertexGesture.element.classList.contains("selected")) {
-          selectGraphElement(pendingVertexGesture.element, pendingVertexGesture.shiftKey);
+          selectGraphElement(
+            pendingVertexGesture.element,
+            pendingVertexGesture.shiftKey,
+          );
         }
       }
 
@@ -2715,7 +2841,10 @@ function wireViewportInteractions() {
         suppressUpcomingSvgClick();
       } else {
         movedVertexIndices.clear();
-        selectGraphElement(pendingVertexGesture.element, pendingVertexGesture.shiftKey);
+        selectGraphElement(
+          pendingVertexGesture.element,
+          pendingVertexGesture.shiftKey,
+        );
         suppressUpcomingSvgClick();
       }
 
@@ -2755,7 +2884,9 @@ function startAutoSaveTimer() {
 function wireKeyboardShortcuts() {
   document.addEventListener("keydown", (event) => {
     if (event.code === "Space" && !event.repeat) {
-      if (["BUTTON", "INPUT", "SELECT"].includes(document.activeElement?.tagName)) {
+      if (
+        ["BUTTON", "INPUT", "SELECT"].includes(document.activeElement?.tagName)
+      ) {
         return;
       }
       spacePanMode = true;

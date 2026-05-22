@@ -399,6 +399,11 @@ body {
   white-space: nowrap;
 }
 
+.trait-header-row .trait-count {
+  padding-right: 0;
+  text-align: center;
+}
+
 .alignment-view {
   display: flex;
   height: 100%;
