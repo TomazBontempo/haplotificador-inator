@@ -14,6 +14,7 @@ const AUTO_SAVE_INTERVAL = 300000;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_PANEL_WIDTH = 240;
 const MIN_PANEL_WIDTH = 180;
+const COLLAPSED_PANEL_RAIL_WIDTH = 28;
 
 const defaultDependencies = {
   parseNexus,
@@ -64,6 +65,7 @@ let labelDragStartOffset = { x: 0, y: 0 };
 let labelDragElement = null;
 let progressDotsInterval = null;
 let progressDotIndex = 0;
+let panelAnimationTimers = new WeakMap();
 
 export function __setNetworkViewDependencies(overrides = {}) {
   dependencies = { ...dependencies, ...overrides };
@@ -315,7 +317,9 @@ function appShell() {
       </nav>
       <div id="main">
         <aside id="data-panel">
-          <button id="collapse-data" type="button">◀</button>
+          <div id="collapse-data" class="panel-collapse-strip" role="button" tabindex="0">
+            <span class="collapse-chevron">&lsaquo;</span>
+          </div>
           <div id="data-content">
             <div id="data-tabs">
               <button id="tab-traits" class="tab-btn active" type="button">Traits</button>
@@ -339,7 +343,9 @@ function appShell() {
           </div>
         </main>
         <aside id="properties-panel">
-          <button id="collapse-props">▶</button>
+          <div id="collapse-props" class="panel-collapse-strip" role="button" tabindex="0">
+            <span class="collapse-chevron">&rsaquo;</span>
+          </div>
           <div id="props-content">
             ${visualsPanelMarkup()}
           </div>
@@ -768,30 +774,28 @@ function syncPanelState() {
   const collapseData = byId("collapse-data");
   const collapseProps = byId("collapse-props");
   const app = byId("app");
-  const visibleDataWidth = state.dataPanelCollapsed ? 0 : dataPanelWidth;
-  const visiblePropsWidth = state.propsPanelCollapsed ? 0 : propsPanelWidth;
+  const visibleDataWidth = state.dataPanelCollapsed
+    ? COLLAPSED_PANEL_RAIL_WIDTH
+    : dataPanelWidth;
+  const visiblePropsWidth = state.propsPanelCollapsed
+    ? COLLAPSED_PANEL_RAIL_WIDTH
+    : propsPanelWidth;
 
   dataPanel?.classList.toggle("collapsed", state.dataPanelCollapsed);
   propsPanel?.classList.toggle("collapsed", state.propsPanelCollapsed);
   if (dataPanel) {
-    dataPanel.style.width = `${visibleDataWidth}px`;
+    dataPanel.style.setProperty("--data-panel-width", `${dataPanelWidth}px`);
   }
   if (propsPanel) {
-    propsPanel.style.width = `${visiblePropsWidth}px`;
+    propsPanel.style.setProperty("--props-panel-width", `${propsPanelWidth}px`);
   }
 
-  if (collapseData) {
-    collapseData.textContent = state.dataPanelCollapsed ? "▶" : "◀";
-  }
-  if (collapseProps) {
-    collapseProps.textContent = state.propsPanelCollapsed ? "◀" : "▶";
-  }
-  if (collapseData) {
-    collapseData.textContent = state.dataPanelCollapsed ? "▶" : "◀";
-  }
-  if (collapseProps) {
-    collapseProps.textContent = state.propsPanelCollapsed ? "◀" : "▶";
-  }
+  collapseData
+    ?.querySelector(".collapse-chevron")
+    ?.replaceChildren(state.dataPanelCollapsed ? "\u203a" : "\u2039");
+  collapseProps
+    ?.querySelector(".collapse-chevron")
+    ?.replaceChildren(state.propsPanelCollapsed ? "\u2039" : "\u203a");
   if (app) {
     app.style.setProperty("--data-panel-width", `${visibleDataWidth}px`);
     app.style.setProperty("--props-panel-width", `${visiblePropsWidth}px`);
@@ -1202,6 +1206,33 @@ function renderGraph() {
   return rerenderNetwork();
 }
 
+function applySvgVisualTheme(svg) {
+  if (!svg) {
+    return;
+  }
+
+  const style = document.createElementNS(SVG_NS, "style");
+  style.textContent = `
+    .vertex.selected .selection-ring {
+      stroke: #f5a623 !important;
+      stroke-width: 3px;
+      fill: none;
+    }
+
+    .edge.selected line {
+      stroke: #f5a623 !important;
+      stroke-width: 3px;
+    }
+
+    .rubber-band {
+      fill: rgba(245, 166, 35, 0.1);
+      stroke: #f5a623;
+      stroke-width: 1px;
+    }
+  `;
+  svg.prepend(style);
+}
+
 function rerenderNetwork() {
   if (!state.graph) {
     return null;
@@ -1214,6 +1245,7 @@ function rerenderNetwork() {
   };
   const svg = dependencies.renderNetwork(state.graph, renderOptions);
   container?.replaceChildren(svg);
+  applySvgVisualTheme(svg);
   applyVisualVisibilityState(svg);
   applyViewportTransform();
   wireLabelInteractions(svg);
@@ -2633,15 +2665,38 @@ function wireToolbar() {
   byId("toggle-legend")?.addEventListener("click", toggleLegend);
 }
 
+function startPanelAnimation(panel, collapsed) {
+  if (!panel) {
+    return;
+  }
+
+  const existingTimer = panelAnimationTimers.get(panel);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  panel.classList.add("animating");
+  panel.classList.toggle("collapsed", collapsed);
+  const timer = setTimeout(() => {
+    panel.classList.remove("animating");
+    panelAnimationTimers.delete(panel);
+  }, 220);
+  panelAnimationTimers.set(panel, timer);
+}
+
 function wirePanels() {
   byId("collapse-data")?.addEventListener("click", (event) => {
-    state.dataPanelCollapsed = !state.dataPanelCollapsed;
+    const collapsed = !state.dataPanelCollapsed;
+    startPanelAnimation(byId("data-panel"), collapsed);
+    state.dataPanelCollapsed = collapsed;
     syncPanelState();
     blurClickedControl(event);
   });
 
   byId("collapse-props")?.addEventListener("click", (event) => {
-    state.propsPanelCollapsed = !state.propsPanelCollapsed;
+    const collapsed = !state.propsPanelCollapsed;
+    startPanelAnimation(byId("properties-panel"), collapsed);
+    state.propsPanelCollapsed = collapsed;
     syncPanelState();
     blurClickedControl(event);
   });
@@ -2650,24 +2705,31 @@ function wirePanels() {
 function setDataPanelWidth(width) {
   dataPanelWidth = Math.max(MIN_PANEL_WIDTH, width);
   const dataPanel = byId("data-panel");
-  if (dataPanel && !state.dataPanelCollapsed) {
-    dataPanel.style.width = `${dataPanelWidth}px`;
+  if (dataPanel) {
+    dataPanel.style.setProperty("--data-panel-width", `${dataPanelWidth}px`);
+    if (!state.dataPanelCollapsed) {
+      dataPanel.style.width = `${dataPanelWidth}px`;
+    }
   }
   byId("app")?.style.setProperty(
     "--data-panel-width",
-    state.dataPanelCollapsed ? "0px" : `${dataPanelWidth}px`,
+    state.dataPanelCollapsed
+      ? `${COLLAPSED_PANEL_RAIL_WIDTH}px`
+      : `${dataPanelWidth}px`,
   );
 }
 
 function setPropsPanelWidth(width) {
   propsPanelWidth = Math.max(MIN_PANEL_WIDTH, width);
   const propsPanel = byId("properties-panel");
-  if (propsPanel && !state.propsPanelCollapsed) {
-    propsPanel.style.width = `${propsPanelWidth}px`;
+  if (propsPanel) {
+    propsPanel.style.setProperty("--props-panel-width", `${propsPanelWidth}px`);
   }
   byId("app")?.style.setProperty(
     "--props-panel-width",
-    state.propsPanelCollapsed ? "0px" : `${propsPanelWidth}px`,
+    state.propsPanelCollapsed
+      ? `${COLLAPSED_PANEL_RAIL_WIDTH}px`
+      : `${propsPanelWidth}px`,
   );
 }
 
@@ -2678,6 +2740,7 @@ function finishPanelResize() {
   const dataPanel = byId("data-panel");
   if (dataPanel) {
     dataPanel.style.transition = "";
+    dataPanel.style.removeProperty("width");
   }
   isResizingData = false;
   document.body.style.userSelect = "";

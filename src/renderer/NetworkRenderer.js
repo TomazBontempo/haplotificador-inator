@@ -293,7 +293,7 @@ export function renderLegend(graph, visualOptions) {
     group.appendChild(circle);
     appendText(group, traitName, traitLabelX, rowY + 4, {
       "font-size": "12px",
-      fill: "#333333",
+      fill: "#444444",
     });
     rowY += LEGEND_ROW_HEIGHT;
   });

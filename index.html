@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Haplotificador-inator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -105,7 +108,9 @@
     </nav>
     <div id="main">
       <aside id="data-panel">
-        <button id="collapse-data" type="button">◀</button>
+        <div id="collapse-data" class="panel-collapse-strip" role="button" tabindex="0">
+          <span class="collapse-chevron">&lsaquo;</span>
+        </div>
         <div id="data-content">
           <div id="data-tabs">
             <button id="tab-traits" class="tab-btn active" type="button">Traits</button>
@@ -129,7 +134,9 @@
         </div>
       </main>
       <aside id="properties-panel">
-        <button id="collapse-props">▶</button>
+        <div id="collapse-props" class="panel-collapse-strip" role="button" tabindex="0">
+          <span class="collapse-chevron">&rsaquo;</span>
+        </div>
         <div id="props-content">
           <div id="visuals-panel-content">
 
