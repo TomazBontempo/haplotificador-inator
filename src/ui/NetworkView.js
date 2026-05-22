@@ -42,6 +42,7 @@ let rubberBandStart = null;
 let rubberBandRect = null;
 let svgContainerResizeObserver = null;
 let pendingVertexGesture = null;
+let dragOffset = {};
 let movedVertexIndices = new Set();
 let suppressNextSvgClick = false;
 let isResizingData = false;
@@ -1743,6 +1744,20 @@ function currentSvg() {
   return byId("svg-container")?.querySelector("svg") ?? null;
 }
 
+function getViewportPoint(event) {
+  const svg = document.querySelector("#svg-container svg");
+  if (!svg) return { x: 0, y: 0 };
+  const viewportGroup = svg.querySelector("g.viewport");
+  if (!viewportGroup) return { x: 0, y: 0 };
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  const transformed = pt.matrixTransform(
+    viewportGroup.getScreenCTM().inverse(),
+  );
+  return { x: transformed.x, y: transformed.y };
+}
+
 function svgScreenScale() {
   const svg = currentSvg();
   const matrix = svg?.getScreenCTM?.();
@@ -2056,6 +2071,27 @@ function moveSelectedVertices(dx, dy) {
   }
 }
 
+function moveDraggedVertices(event) {
+  const primaryIndex = pendingVertexGesture?.primaryIndex;
+  const vertex = vertexByIndex(primaryIndex);
+  const offset = dragOffset[primaryIndex];
+  if (!vertex || !offset) {
+    return;
+  }
+
+  const pointer = getViewportPoint(event);
+  const oldPrimaryX = vertex.x ?? 0;
+  const oldPrimaryY = vertex.y ?? 0;
+  const newPrimaryX = pointer.x - offset.x;
+  const newPrimaryY = pointer.y - offset.y;
+  const delta = {
+    x: newPrimaryX - oldPrimaryX,
+    y: newPrimaryY - oldPrimaryY,
+  };
+
+  moveSelectedVertices(delta.x, delta.y);
+}
+
 function beginRubberBand(event) {
   const svg = currentSvg();
   if (!svg) {
@@ -2149,11 +2185,22 @@ function wireSvgInteractions(svg) {
     lastPointer = { x: event.clientX, y: event.clientY };
 
     if (vertexElement) {
+      const primaryIndex = Number(vertexElement.dataset.index);
+      const vertex = vertexByIndex(primaryIndex);
+      const pointer = getViewportPoint(event);
+      dragOffset = {};
+      if (vertex) {
+        dragOffset[primaryIndex] = {
+          x: pointer.x - (vertex.x ?? 0),
+          y: pointer.y - (vertex.y ?? 0),
+        };
+      }
       pendingVertexGesture = {
         element: vertexElement,
         shiftKey: event.shiftKey,
         startX: event.clientX,
         startY: event.clientY,
+        primaryIndex,
       };
       isDraggingNodes = false;
       event.preventDefault();
@@ -2635,8 +2682,7 @@ function wireViewportInteractions() {
         return;
       }
 
-      const delta = screenDeltaToGraphDelta(dx, dy);
-      moveSelectedVertices(delta.x, delta.y);
+      moveDraggedVertices(event);
     } else if (isPanning) {
       const delta = screenDeltaToViewportDelta(dx, dy);
       state.visualOptions.panX += delta.x;
@@ -2674,6 +2720,7 @@ function wireViewportInteractions() {
       }
 
       pendingVertexGesture = null;
+      dragOffset = {};
       isDraggingNodes = false;
       lastPointer = null;
       return;
