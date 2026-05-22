@@ -205,8 +205,13 @@
     </footer>
     <div id="progress-overlay" class="hidden">
       <div class="progress-dialog">
-        <p id="progress-stage">Parsing file...</p>
-        <progress id="progress-bar" value="0" max="100"></progress>
+        <p id="progress-stage-label">
+          <span id="progress-stage-text"></span>
+          <span id="progress-dots"></span>
+        </p>
+        <div id="progress-bar-container">
+          <div id="progress-bar-fill"></div>
+        </div>
         <button id="progress-cancel" type="button">Cancel</button>
       </div>
     </div>

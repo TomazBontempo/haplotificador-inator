@@ -62,6 +62,8 @@ let labelDragVertexIndex = null;
 let labelDragStartMouse = { x: 0, y: 0 };
 let labelDragStartOffset = { x: 0, y: 0 };
 let labelDragElement = null;
+let progressDotsInterval = null;
+let progressDotIndex = 0;
 
 export function __setNetworkViewDependencies(overrides = {}) {
   dependencies = { ...dependencies, ...overrides };
@@ -353,8 +355,13 @@ function appShell() {
       </footer>
       <div id="progress-overlay" class="hidden">
         <div class="progress-dialog">
-          <p id="progress-stage">Parsing file...</p>
-          <progress id="progress-bar" value="0" max="100"></progress>
+          <p id="progress-stage-label">
+            <span id="progress-stage-text"></span>
+            <span id="progress-dots"></span>
+          </p>
+          <div id="progress-bar-container">
+            <div id="progress-bar-fill"></div>
+          </div>
           <button id="progress-cancel" type="button">Cancel</button>
         </div>
       </div>
@@ -400,32 +407,71 @@ function showMessage(message) {
   }
 }
 
-function setProgress(stage, value = null, indeterminate = false) {
-  const overlay = byId("progress-overlay");
-  const stageElement = byId("progress-stage");
-  const progressBar = byId("progress-bar");
-
-  setHidden(overlay, false);
-  if (stageElement) {
-    stageElement.textContent = stage;
-  }
-  if (progressBar) {
-    progressBar.classList.toggle("indeterminate", indeterminate);
-    if (value === null) {
-      progressBar.removeAttribute("value");
-    } else {
-      progressBar.value = value;
-    }
+function clearProgressDotsInterval() {
+  if (progressDotsInterval) {
+    clearInterval(progressDotsInterval);
+    progressDotsInterval = null;
   }
 }
 
-function hideProgress() {
-  const progressBar = byId("progress-bar");
-  progressBar?.classList.remove("indeterminate");
-  if (progressBar) {
-    progressBar.value = 0;
+function startProgressDotsInterval() {
+  const dotStates = [".", "..", "..."];
+  clearProgressDotsInterval();
+  progressDotsInterval = setInterval(() => {
+    const dots = byId("progress-dots");
+    if (dots) {
+      dots.textContent = dotStates[progressDotIndex % 3];
+    }
+    progressDotIndex++;
+  }, 400);
+}
+
+function setProgressStage(stageNumber, stageText) {
+  const stageElement = byId("progress-stage-text");
+  const dots = byId("progress-dots");
+  const progressBarFill = byId("progress-bar-fill");
+
+  progressDotIndex = 0;
+  if (stageElement) {
+    stageElement.textContent = stageText;
   }
+  if (dots) {
+    dots.textContent = "";
+  }
+  if (progressBarFill) {
+    progressBarFill.style.width = `${(stageNumber / 5) * 100}%`;
+  }
+}
+
+function showProgressOverlay() {
+  const progressBarFill = byId("progress-bar-fill");
+  const stageElement = byId("progress-stage-text");
+  const dots = byId("progress-dots");
+
+  setHidden(byId("progress-overlay"), false);
+  if (progressBarFill) {
+    progressBarFill.style.width = "0%";
+    progressBarFill.getBoundingClientRect();
+  }
+  if (stageElement) {
+    stageElement.textContent = "";
+  }
+  if (dots) {
+    dots.textContent = "";
+  }
+  progressDotIndex = 0;
+  startProgressDotsInterval();
+}
+
+function hideProgressOverlay() {
+  const progressBarFill = byId("progress-bar-fill");
+
   setHidden(byId("progress-overlay"), true);
+  clearProgressDotsInterval();
+  progressDotIndex = 0;
+  if (progressBarFill) {
+    progressBarFill.style.width = "0%";
+  }
 }
 
 function readFileText(file) {
@@ -1132,7 +1178,7 @@ function terminateWorkers() {
 
 function cancelComputation() {
   terminateWorkers();
-  hideProgress();
+  hideProgressOverlay();
   showMessage("Computation cancelled.");
 }
 
@@ -1630,7 +1676,8 @@ export async function runCurrentPipeline() {
   terminateWorkers();
   const isFirstAlgorithmRunForFile = !state.graph;
   try {
-    setProgress("Parsing file...", 20);
+    showProgressOverlay();
+    setProgressStage(1, "Parsing file");
     let parsed = state.parsedNexus;
     if (!parsed) {
       const text = await readFileText(state.currentFile);
@@ -1642,12 +1689,12 @@ export async function runCurrentPipeline() {
     state.maskedSites = masked;
     syncStatusBar();
 
-    setProgress("Building model...", 40);
+    setProgressStage(2, "Building model");
     const hapNet = new dependencies.HapNet(parsed, masked > 0 ? { mask } : {});
     state.hapNet = hapNet;
 
     algorithmWorker = createModuleWorker("../workers/algorithmWorker.js");
-    setProgress(`Running ${state.algorithm}...`, null, true);
+    setProgressStage(3, "Running " + state.algorithm);
     const algorithmGraphJSON = await workerResult(algorithmWorker, {
       algorithm: state.algorithm,
       hapNetJSON: hapNet.toJSON(),
@@ -1656,8 +1703,7 @@ export async function runCurrentPipeline() {
     algorithmWorker.terminate();
     algorithmWorker = null;
 
-    setProgress("Computing layout...", 70);
-    setProgress("Computing layout...", null, true);
+    setProgressStage(4, "Computing layout");
     layoutWorker = createModuleWorker("../workers/layoutWorker.js");
     const layoutGraphJSON = await workerResult(layoutWorker, {
       graphJSON: algorithmGraphJSON,
@@ -1675,17 +1721,16 @@ export async function runCurrentPipeline() {
     }
     assignTraitColors(state.hapNet);
     updateTraitColorPickers();
-    setProgress("Rendering network...", 90);
+    setProgressStage(5, "Rendering network");
     renderGraph();
-    setProgress("Rendering network...", 100);
     markUnsavedChanges();
     syncStatusBar();
 
     await new Promise((resolve) => setTimeout(resolve, 300));
-    hideProgress();
+    hideProgressOverlay();
   } catch (error) {
     terminateWorkers();
-    hideProgress();
+    hideProgressOverlay();
     showMessage(`Algorithm failed: ${error.message}`);
   }
 }
