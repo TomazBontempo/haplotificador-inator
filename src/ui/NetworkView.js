@@ -1132,29 +1132,23 @@ function buildAlignmentTab(container, characters, taxa, maskedSiteIndices = []) 
     return;
   }
 
-  const view = document.createElement("div");
-  view.className = "alignment-view";
-
-  const namesColumn = document.createElement("div");
-  namesColumn.className = "alignment-names";
-
-  const sequenceWrapper = document.createElement("div");
-  sequenceWrapper.className = "alignment-sequence-wrapper";
-  const sequencesColumn = document.createElement("div");
-  sequencesColumn.className = "alignment-sequences";
+  const table = document.createElement("div");
+  table.className = "alignment-table";
 
   for (const name of names) {
     if (!Object.hasOwn(matrix, name)) {
       continue;
     }
 
-    const nameCell = document.createElement("div");
-    nameCell.className = "alignment-name-cell";
-    nameCell.textContent = name;
-    namesColumn.appendChild(nameCell);
+    const row = document.createElement("div");
+    row.className = "alignment-row";
 
-    const sequenceCell = document.createElement("div");
-    sequenceCell.className = "alignment-sequence-cell";
+    const nameCell = document.createElement("span");
+    nameCell.className = "alignment-name";
+    nameCell.textContent = name;
+
+    const sequenceCell = document.createElement("span");
+    sequenceCell.className = "alignment-sequence";
     const sequence = String(matrix[name]).toUpperCase();
     for (let i = 0; i < sequence.length; i += 1) {
       const char = sequence[i];
@@ -1163,12 +1157,11 @@ function buildAlignmentTab(container, characters, taxa, maskedSiteIndices = []) 
       span.textContent = char;
       sequenceCell.appendChild(span);
     }
-    sequencesColumn.appendChild(sequenceCell);
+    row.append(nameCell, sequenceCell);
+    table.appendChild(row);
   }
 
-  sequenceWrapper.appendChild(sequencesColumn);
-  view.append(namesColumn, sequenceWrapper);
-  container.appendChild(view);
+  container.appendChild(table);
 }
 
 function activateDataTab(tabName) {
