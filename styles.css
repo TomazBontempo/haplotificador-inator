@@ -292,6 +292,7 @@ body {
 }
 
 #collapse-data {
+  top: 36px;
   right: 0;
   transform: translateX(50%);
 }
@@ -323,18 +324,21 @@ body {
 
 #data-tabs {
   display: flex;
-  width: 100%;
+  align-self: flex-start;
+  width: auto;
   border-bottom: 1px solid #cccccc;
 }
 
 .tab-btn {
-  flex: 1;
-  padding: 6px;
+  flex: 0 0 120px;
+  width: 120px;
+  height: 28px;
+  padding: 0;
   border: 0;
   border-bottom: 2px solid transparent;
   background: #f0f0f0;
   color: #222222;
-  font: inherit;
+  font-size: 12px;
   font-weight: 400;
   text-align: center;
   cursor: pointer;
