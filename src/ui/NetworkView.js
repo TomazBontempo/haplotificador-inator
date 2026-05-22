@@ -2675,6 +2675,10 @@ function finishPanelResize() {
   if (!isResizingData) {
     return;
   }
+  const dataPanel = byId("data-panel");
+  if (dataPanel) {
+    dataPanel.style.transition = "";
+  }
   isResizingData = false;
   document.body.style.userSelect = "";
 }
@@ -2687,6 +2691,7 @@ function wirePanelResize() {
     }
 
     isResizingData = true;
+    dataPanel.style.transition = "none";
     resizeStartX = event.clientX;
     resizeStartWidth = dataPanel.offsetWidth;
     document.body.style.userSelect = "none";
