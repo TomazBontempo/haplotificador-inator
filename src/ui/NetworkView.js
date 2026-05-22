@@ -50,6 +50,9 @@ let resizeStartX = 0;
 let resizeStartWidth = DEFAULT_PANEL_WIDTH;
 let dataPanelWidth = DEFAULT_PANEL_WIDTH;
 let propsPanelWidth = DEFAULT_PANEL_WIDTH;
+let isLegendDragging = false;
+let legendDragOffset = null;
+let legendDragPosition = null;
 
 export function __setNetworkViewDependencies(overrides = {}) {
   dependencies = { ...dependencies, ...overrides };
@@ -84,6 +87,7 @@ function createInitialState() {
       zoom: 1,
       panX: 0,
       panY: 0,
+      legendPosition: null,
     },
     history: {
       undoStack: [],
@@ -111,6 +115,9 @@ function resetState() {
   dataPanelWidth = DEFAULT_PANEL_WIDTH;
   propsPanelWidth = DEFAULT_PANEL_WIDTH;
   movedVertexIndices.clear();
+  isLegendDragging = false;
+  legendDragOffset = null;
+  legendDragPosition = null;
   updateUndoRedoButtons();
 }
 
@@ -1074,10 +1081,15 @@ function rerenderNetwork() {
   }
 
   const container = byId("svg-container");
-  const svg = dependencies.renderNetwork(state.graph, state.visualOptions);
+  const renderOptions = {
+    ...state.visualOptions,
+    traitNames: state.hapNet?.traitNames ?? [],
+  };
+  const svg = dependencies.renderNetwork(state.graph, renderOptions);
   container?.replaceChildren(svg);
   applyViewportTransform();
   wireSvgInteractions(svg);
+  wireLegendInteractions(svg);
   return svg;
 }
 
@@ -1465,6 +1477,7 @@ export async function runCurrentPipeline() {
   }
 
   terminateWorkers();
+  const isFirstAlgorithmRunForFile = !state.graph;
   try {
     setProgress("Parsing file...", 20);
     let parsed = state.parsedNexus;
@@ -1506,6 +1519,9 @@ export async function runCurrentPipeline() {
     clearHistory();
     state.visualOptions.width = 1000;
     state.visualOptions.height = 1000;
+    if (isFirstAlgorithmRunForFile) {
+      state.visualOptions.legendPosition = null;
+    }
     assignTraitColors(state.hapNet);
     updateTraitColorPickers();
     setProgress("Rendering network...", 90);
@@ -1543,6 +1559,7 @@ async function handleNexusFileSelected(file) {
   state.graph = null;
   clearHistory();
   state.visualOptions.vertices.traitColors = [];
+  state.visualOptions.legendPosition = null;
   syncVisualsPanel();
   state.maskedSites = 0;
   state.saveHandle = null;
@@ -1815,6 +1832,74 @@ function svgTranslateCoordinates(element) {
   return { x, y };
 }
 
+function setLegendTransform(position) {
+  const legend = currentSvg()?.querySelector("#network-legend");
+  if (!legend || !position) {
+    return;
+  }
+
+  legend.setAttribute("transform", `translate(${position.x}, ${position.y})`);
+}
+
+function beginLegendDrag(event) {
+  const legend = event.currentTarget;
+  const currentPosition = svgTranslateCoordinates(legend) ?? { x: 0, y: 0 };
+  const pointer = svgPoint(event);
+
+  isLegendDragging = true;
+  legendDragPosition = { ...currentPosition };
+  legendDragOffset = {
+    x: pointer.x - currentPosition.x,
+    y: pointer.y - currentPosition.y,
+  };
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function updateLegendDrag(event) {
+  if (!isLegendDragging || !legendDragOffset) {
+    return;
+  }
+
+  const pointer = svgPoint(event);
+  legendDragPosition = {
+    x: pointer.x - legendDragOffset.x,
+    y: pointer.y - legendDragOffset.y,
+  };
+  setLegendTransform(legendDragPosition);
+  event.preventDefault();
+}
+
+function finishLegendDrag() {
+  if (!isLegendDragging) {
+    return;
+  }
+
+  isLegendDragging = false;
+  const finalPosition = legendDragPosition;
+  legendDragOffset = null;
+  legendDragPosition = null;
+
+  if (!finalPosition) {
+    return;
+  }
+
+  const previousPosition = state.visualOptions.legendPosition;
+  const changed =
+    !previousPosition ||
+    previousPosition.x !== finalPosition.x ||
+    previousPosition.y !== finalPosition.y;
+
+  if (!changed) {
+    return;
+  }
+
+  pushUndoSnapshot("legend");
+  state.visualOptions.legendPosition = finalPosition;
+  suppressUpcomingSvgClick();
+  markVisualChange();
+}
+
 function commitMovedVertexPositions() {
   for (const index of movedVertexIndices) {
     const element = currentSvg()?.querySelector(`.vertex[data-index="${index}"]`);
@@ -1961,6 +2046,19 @@ function wireSvgInteractions(svg) {
   });
 }
 
+function wireLegendInteractions(svg) {
+  const legend = svg.querySelector("#network-legend");
+  if (!legend) {
+    return;
+  }
+
+  legend.addEventListener("mousedown", (event) => {
+    if (event.button === 0) {
+      beginLegendDrag(event);
+    }
+  });
+}
+
 function selectedAlgorithmInput() {
   return document.querySelector('input[name="algorithm"]:checked');
 }
@@ -2031,13 +2129,17 @@ async function exportCurrentNetwork() {
     height: Number(byId("export-height")?.value ?? 2000),
     transparent: Boolean(byId("export-transparent")?.checked),
   };
+  const visualOptions = {
+    ...state.visualOptions,
+    traitNames: state.hapNet?.traitNames ?? [],
+  };
 
   if (format === "SVG") {
-    await dependencies.exportSVG(state.graph, state.visualOptions, exportOptions);
+    await dependencies.exportSVG(state.graph, visualOptions, exportOptions);
   } else if (format === "PDF") {
-    await dependencies.exportPDF(state.graph, state.visualOptions, exportOptions);
+    await dependencies.exportPDF(state.graph, visualOptions, exportOptions);
   } else {
-    await dependencies.exportPNG(state.graph, state.visualOptions, exportOptions);
+    await dependencies.exportPNG(state.graph, visualOptions, exportOptions);
   }
 
   setHidden(byId("export-modal"), true);
@@ -2370,6 +2472,11 @@ function wireViewportInteractions() {
   });
 
   document.addEventListener("mousemove", (event) => {
+    if (isLegendDragging) {
+      updateLegendDrag(event);
+      return;
+    }
+
     if (!lastPointer) {
       return;
     }
@@ -2412,6 +2519,11 @@ function wireViewportInteractions() {
   });
 
   document.addEventListener("mouseup", () => {
+    if (isLegendDragging) {
+      finishLegendDrag();
+      return;
+    }
+
     if (pendingVertexGesture) {
       if (isDraggingNodes) {
         commitMovedVertexPositions();

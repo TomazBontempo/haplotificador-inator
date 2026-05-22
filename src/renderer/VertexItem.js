@@ -14,11 +14,11 @@ function numericValue(value, fallback) {
   return Number.isFinite(number) ? number : fallback;
 }
 
-function vertexFrequency(vertex) {
+export function vertexFrequency(vertex) {
   return Math.max(0, numericValue(vertex.info?.frequency ?? vertex.info?.freq, 1));
 }
 
-function vertexRadius(vertex, baseRadius) {
+export function vertexRadius(vertex, baseRadius) {
   const radius = numericValue(vertex.radius, Number.NaN);
   if (Number.isFinite(radius) && radius > 0) {
     return radius;

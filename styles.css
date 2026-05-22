@@ -591,6 +591,32 @@ progress.indeterminate {
   stroke-width: 1px;
 }
 
+.legend-bg {
+  fill: white;
+  fill-opacity: 0.85;
+  stroke: #cccccc;
+  stroke-width: 1;
+  rx: 4;
+}
+
+.legend-title {
+  font-size: 10px;
+  font-weight: 600;
+  fill: #666666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.legend-size-circle {
+  fill: #999999;
+  stroke: #666666;
+  stroke-width: 1;
+}
+
+#network-legend {
+  cursor: move;
+}
+
 .hidden {
   display: none !important;
 }
