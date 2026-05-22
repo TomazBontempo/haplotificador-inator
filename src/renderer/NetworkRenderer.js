@@ -36,6 +36,7 @@ const DEFAULT_OPTIONS = Object.freeze({
   panX: 0,
   panY: 0,
   legendPosition: null,
+  labelOffsets: {},
   traitNames: [],
 });
 
@@ -75,6 +76,7 @@ function normalizeOptions(options) {
     },
     edges,
     vertices,
+    labelOffsets: options.labelOffsets ?? DEFAULT_OPTIONS.labelOffsets,
     traitNames: Array.isArray(options.traitNames) ? options.traitNames : DEFAULT_OPTIONS.traitNames,
     legendPosition: options.legendPosition ?? DEFAULT_OPTIONS.legendPosition,
   };

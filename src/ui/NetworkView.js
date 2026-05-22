@@ -53,6 +53,11 @@ let propsPanelWidth = DEFAULT_PANEL_WIDTH;
 let isLegendDragging = false;
 let legendDragOffset = null;
 let legendDragPosition = null;
+let isLabelDragging = false;
+let labelDragVertexIndex = null;
+let labelDragStartMouse = { x: 0, y: 0 };
+let labelDragStartOffset = { x: 0, y: 0 };
+let labelDragElement = null;
 
 export function __setNetworkViewDependencies(overrides = {}) {
   dependencies = { ...dependencies, ...overrides };
@@ -88,6 +93,7 @@ function createInitialState() {
       panX: 0,
       panY: 0,
       legendPosition: null,
+      labelOffsets: {},
     },
     history: {
       undoStack: [],
@@ -118,6 +124,11 @@ function resetState() {
   isLegendDragging = false;
   legendDragOffset = null;
   legendDragPosition = null;
+  isLabelDragging = false;
+  labelDragVertexIndex = null;
+  labelDragStartMouse = { x: 0, y: 0 };
+  labelDragStartOffset = { x: 0, y: 0 };
+  labelDragElement = null;
   updateUndoRedoButtons();
 }
 
@@ -1088,6 +1099,7 @@ function rerenderNetwork() {
   const svg = dependencies.renderNetwork(state.graph, renderOptions);
   container?.replaceChildren(svg);
   applyViewportTransform();
+  wireLabelInteractions(svg);
   wireSvgInteractions(svg);
   wireLegendInteractions(svg);
   return svg;
@@ -1336,6 +1348,7 @@ function updateTraitColorPickers() {
 
 function syncVisualsPanel() {
   const visualOptions = state.visualOptions;
+  visualOptions.labelOffsets = normalizeLabelOffsets(visualOptions.labelOffsets);
   const edgeColor = byId("visual-edge-color");
   const edgeWidth = byId("visual-edge-width");
   const edgeWidthValue = byId("visual-edge-width-value");
@@ -1560,6 +1573,7 @@ async function handleNexusFileSelected(file) {
   clearHistory();
   state.visualOptions.vertices.traitColors = [];
   state.visualOptions.legendPosition = null;
+  state.visualOptions.labelOffsets = {};
   syncVisualsPanel();
   state.maskedSites = 0;
   state.saveHandle = null;
@@ -1645,6 +1659,23 @@ function savedHapNetSummary(savedState) {
   return null;
 }
 
+function normalizeLabelOffsets(labelOffsets = {}) {
+  if (!labelOffsets || typeof labelOffsets !== "object") {
+    return {};
+  }
+
+  const normalized = {};
+  for (const [key, value] of Object.entries(labelOffsets)) {
+    const x = Number(value?.x);
+    const y = Number(value?.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      normalized[String(key)] = { x, y };
+    }
+  }
+
+  return normalized;
+}
+
 function mergeVisualOptions(savedVisualOptions = {}) {
   return {
     ...state.visualOptions,
@@ -1661,6 +1692,7 @@ function mergeVisualOptions(savedVisualOptions = {}) {
       ...state.visualOptions.vertices,
       ...(savedVisualOptions.vertices ?? {}),
     },
+    labelOffsets: normalizeLabelOffsets(savedVisualOptions.labelOffsets ?? state.visualOptions.labelOffsets),
   };
 }
 
@@ -1830,6 +1862,91 @@ function svgTranslateCoordinates(element) {
   }
 
   return { x, y };
+}
+
+function labelElementFromEvent(event) {
+  const target = event.target instanceof Element ? event.target : null;
+  return target?.closest?.(".vertex-label") ?? null;
+}
+
+function numericLabelOffset(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function labelOffsetFromElement(labelElement) {
+  return {
+    x: numericLabelOffset(labelElement.getAttribute("x"), 0),
+    y: numericLabelOffset(labelElement.getAttribute("y"), 0),
+  };
+}
+
+function setLabelElementOffset(labelElement, offset) {
+  labelElement?.setAttribute("x", String(offset.x));
+  labelElement?.setAttribute("y", String(offset.y));
+}
+
+function beginLabelDrag(event, labelElement) {
+  const vertexIndex = labelElement.dataset.vertexIndex;
+  if (vertexIndex === undefined) {
+    return;
+  }
+
+  isLabelDragging = true;
+  labelDragVertexIndex = String(vertexIndex);
+  labelDragStartMouse = svgPoint(event);
+  labelDragStartOffset = labelOffsetFromElement(labelElement);
+  labelDragElement = labelElement;
+  pushUndoSnapshot("labelDrag");
+  event.stopPropagation();
+  event.preventDefault();
+}
+
+function updateLabelDrag(event) {
+  if (!isLabelDragging || !labelDragElement) {
+    return;
+  }
+
+  const pointer = svgPoint(event);
+  const nextOffset = {
+    x: labelDragStartOffset.x + pointer.x - labelDragStartMouse.x,
+    y: labelDragStartOffset.y + pointer.y - labelDragStartMouse.y,
+  };
+  setLabelElementOffset(labelDragElement, nextOffset);
+  event.preventDefault();
+}
+
+function finishLabelDrag() {
+  if (!isLabelDragging || labelDragVertexIndex === null || !labelDragElement) {
+    isLabelDragging = false;
+    labelDragVertexIndex = null;
+    labelDragElement = null;
+    return;
+  }
+
+  const finalOffset = labelOffsetFromElement(labelDragElement);
+  state.visualOptions.labelOffsets = {
+    ...(state.visualOptions.labelOffsets ?? {}),
+    [labelDragVertexIndex]: finalOffset,
+  };
+  isLabelDragging = false;
+  labelDragVertexIndex = null;
+  labelDragStartMouse = { x: 0, y: 0 };
+  labelDragStartOffset = { x: 0, y: 0 };
+  labelDragElement = null;
+  suppressUpcomingSvgClick();
+  markVisualChange();
+}
+
+function handleLabelMousedown(event) {
+  if (event.button !== 0) {
+    return;
+  }
+
+  const labelElement = labelElementFromEvent(event);
+  if (labelElement) {
+    beginLabelDrag(event, labelElement);
+  }
 }
 
 function setLegendTransform(position) {
@@ -2022,6 +2139,11 @@ function wireSvgInteractions(svg) {
       return;
     }
 
+    if (labelElementFromEvent(event)) {
+      handleLabelMousedown(event);
+      return;
+    }
+
     const vertexElement = event.target.closest?.(".vertex");
     const edgeElement = event.target.closest?.(".edge");
     lastPointer = { x: event.clientX, y: event.clientY };
@@ -2043,6 +2165,12 @@ function wireSvgInteractions(svg) {
       event.preventDefault();
       beginRubberBand(event);
     }
+  });
+}
+
+function wireLabelInteractions(svg) {
+  svg.querySelectorAll(".vertex-label").forEach((label) => {
+    label.addEventListener("mousedown", handleLabelMousedown);
   });
 }
 
@@ -2472,6 +2600,11 @@ function wireViewportInteractions() {
   });
 
   document.addEventListener("mousemove", (event) => {
+    if (isLabelDragging) {
+      updateLabelDrag(event);
+      return;
+    }
+
     if (isLegendDragging) {
       updateLegendDrag(event);
       return;
@@ -2519,6 +2652,11 @@ function wireViewportInteractions() {
   });
 
   document.addEventListener("mouseup", () => {
+    if (isLabelDragging) {
+      finishLabelDrag();
+      return;
+    }
+
     if (isLegendDragging) {
       finishLegendDrag();
       return;

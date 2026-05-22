@@ -580,6 +580,13 @@ progress.indeterminate {
   fill: none;
 }
 
+.vertex-label {
+  pointer-events: all !important;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .edge.selected line {
   stroke: #0066cc;
   stroke-width: 3px;
