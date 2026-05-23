@@ -4099,6 +4099,7 @@ function wireViewportInteractions() {
   viewport.addEventListener(
     "touchmove",
     (event) => {
+      event.preventDefault();
       if (!touchPanActive || event.touches.length !== 2) {
         return;
       }
@@ -4117,7 +4118,6 @@ function wireViewportInteractions() {
       lastTouchX = currentX;
       lastTouchY = currentY;
       applyViewportTransform();
-      event.preventDefault();
     },
     { passive: false },
   );

@@ -41,6 +41,7 @@ body {
 body {
   margin: 0;
   padding: 0;
+  overscroll-behavior: none;
   background: var(--color-bg);
   color: var(--color-text-primary);
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
@@ -735,6 +736,7 @@ input[type="color"]:focus-visible {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  touch-action: none;
   border: 2px solid transparent;
   background: var(--color-canvas);
 }
@@ -756,6 +758,7 @@ input[type="color"]:focus-visible {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  touch-action: none;
   background: var(--color-canvas);
   color: var(--color-text-muted);
   text-align: center;
