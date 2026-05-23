@@ -2237,15 +2237,22 @@ function updateTraitColorPickers() {
     if (!traitColors[index]) {
       state.visualOptions.vertices.traitColors[index] = input.value;
     }
-    input.addEventListener("mousedown", () => {
-      // Snapshot before the color picker opens so undo returns to the pre-edit color.
-      pushUndoSnapshot("color");
+    let previousColor = input.value;
+    input.addEventListener("mousedown", (event) => {
+      // Store current color so the change handler can detect a real edit.
+      previousColor = event.currentTarget.value;
     });
     input.addEventListener("change", (event) => {
+      // Skip snapshot if color did not change — prevents empty undos
+      // when the user opens and closes the picker without picking.
+      if (event.currentTarget.value === previousColor) {
+        return;
+      }
       const target = event.target;
       if (!(target instanceof HTMLInputElement)) {
         return;
       }
+      pushUndoSnapshot("color");
       state.visualOptions.vertices.traitColors[index] = target.value;
       rerenderNetwork();
       markVisualChange();
@@ -2304,19 +2311,29 @@ function syncVisualsPanel() {
  * Wires all visual customization controls in the properties panel.
  */
 function initVisualsPanel() {
-  byId("visual-edge-color")?.addEventListener("mousedown", () => {
-    // Snapshot on pointer-down catches the color before native pickers mutate it.
-    pushUndoSnapshot("color");
-  });
-  byId("visual-edge-color")?.addEventListener("change", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement)) {
-      return;
-    }
-    state.visualOptions.edges.color = target.value;
-    rerenderNetwork();
-    markVisualChange();
-  });
+  const edgeColorInput = byId("visual-edge-color");
+  if (edgeColorInput instanceof HTMLInputElement) {
+    let previousColor = edgeColorInput.value;
+    edgeColorInput.addEventListener("mousedown", (event) => {
+      // Store current color so the change handler can detect a real edit.
+      previousColor = event.currentTarget.value;
+    });
+    edgeColorInput.addEventListener("change", (event) => {
+      // Skip snapshot if color did not change — prevents empty undos
+      // when the user opens and closes the picker without picking.
+      if (event.currentTarget.value === previousColor) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      pushUndoSnapshot("color");
+      state.visualOptions.edges.color = target.value;
+      rerenderNetwork();
+      markVisualChange();
+    });
+  }
 
   byId("visual-edge-width")?.addEventListener("mousedown", () => {
     // Width sliders emit many input events, but one undo step should cover the drag.
@@ -2346,26 +2363,36 @@ function initVisualsPanel() {
       if (!(target instanceof HTMLInputElement)) {
         return;
       }
-      pushUndoSnapshot("display");
+      // Mutation display is a view preference — excluded from undo history.
       state.visualOptions.edges.displayMode = target.value;
       rerenderNetwork();
       markVisualChange();
     });
   });
 
-  byId("visual-inferred-color")?.addEventListener("mousedown", () => {
-    // Snapshot before the picker opens keeps undo independent from browser timing.
-    pushUndoSnapshot("color");
-  });
-  byId("visual-inferred-color")?.addEventListener("change", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement)) {
-      return;
-    }
-    state.visualOptions.vertices.inferredColor = target.value;
-    rerenderNetwork();
-    markVisualChange();
-  });
+  const inferredColorInput = byId("visual-inferred-color");
+  if (inferredColorInput instanceof HTMLInputElement) {
+    let previousColor = inferredColorInput.value;
+    inferredColorInput.addEventListener("mousedown", (event) => {
+      // Store current color so the change handler can detect a real edit.
+      previousColor = event.currentTarget.value;
+    });
+    inferredColorInput.addEventListener("change", (event) => {
+      // Skip snapshot if color did not change — prevents empty undos
+      // when the user opens and closes the picker without picking.
+      if (event.currentTarget.value === previousColor) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      pushUndoSnapshot("color");
+      state.visualOptions.vertices.inferredColor = target.value;
+      rerenderNetwork();
+      markVisualChange();
+    });
+  }
 
   byId("visual-font-size")?.addEventListener("mousedown", () => {
     // Font-size changes are previewed live, so the drag should remain one history item.
