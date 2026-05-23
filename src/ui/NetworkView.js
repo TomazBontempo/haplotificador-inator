@@ -567,8 +567,8 @@ function buildHelpContent() {
       </div>
       <div class="help-citation">
         <strong>PopART:</strong><br>
-        Leigh, J.W. & Bryant, D. (2015). PopART: Full-feature software for
-        haplotype network construction. Methods in Ecology and Evolution, 6(9), 1110–1116.
+        Leigh JW, Bryant D (2015). PopART: Full-feature software for haplotype
+        network construction. Methods Ecol Evol 6(9):1110–1116.
         <a href="https://doi.org/10.1111/2041-210X.12410" target="_blank">
           doi:10.1111/2041-210X.12410
         </a>
@@ -576,23 +576,25 @@ function buildHelpContent() {
       <h4>Algorithm-specific citations:</h4>
       <div class="help-citation">
         <strong>MSN / MJN:</strong><br>
-        Bandelt, H.J., Forster, P. & Röhl, A. (1999). Median-joining networks
-        for inferring intraspecific phylogenies. Molecular Biology and Evolution, 16(1), 37–48.
+        Bandelt H, Forster P, Röhl A (1999). Median-joining networks for
+        inferring intraspecific phylogenies. Mol Biol Evol 16(1):37–48.
         <a href="https://doi.org/10.1093/oxfordjournals.molbev.a026036" target="_blank">
           doi:10.1093/oxfordjournals.molbev.a026036
         </a>
       </div>
       <div class="help-citation">
         <strong>TCS:</strong><br>
-        Clement, M., Posada, D. & Crandall, K.A. (2000). TCS: a computer program
-        to estimate gene genealogies. Molecular Ecology, 9(10), 1657–1659.
-        <a href="https://doi.org/10.1046/j.1365-294x.2000.01020.x" target="_blank">
-          doi:10.1046/j.1365-294x.2000.01020.x
-        </a>
+        Clement M, Snell Q, Walke P, Posada D, Crandall K (2002). TCS:
+        estimating gene genealogies. Proc 16th Int Parallel Distrib Process
+        Symp 2:184.
       </div>
       <div class="help-citation">
         <strong>IntNJ:</strong><br>
-        Leigh, J.W. & Bryant, D. (2015) — same as PopART citation above.
+        Leigh JW, Bryant D (2015). PopART: Full-feature software for haplotype
+        network construction. Methods Ecol Evol 6(9):1110–1116.
+        <a href="https://doi.org/10.1111/2041-210X.12410" target="_blank">
+          doi:10.1111/2041-210X.12410
+        </a>
       </div>
     `,
   };

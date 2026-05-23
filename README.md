@@ -156,24 +156,26 @@ as part of the Allan Wilson Centre Imaging Evolution Initiative.
 > https://haplotificador-inator.vercel.app
 
 **The original PopART software:**
-> Leigh, J.W. & Bryant, D. (2015). PopART: Full-feature software for haplotype
-> network construction. *Methods in Ecology and Evolution*, 6(9), 1110–1116.
+> Leigh JW, Bryant D (2015). PopART: Full-feature software for haplotype
+> network construction. Methods Ecol Evol 6(9):1110–1116.
 > https://doi.org/10.1111/2041-210X.12410
 
 **Algorithm-specific citations:**
 
 If you used MSN or MJN:
-> Bandelt, H.J., Forster, P. & Röhl, A. (1999). Median-joining networks for
-> inferring intraspecific phylogenies. *Molecular Biology and Evolution*, 16(1), 37–48.
+> Bandelt H, Forster P, Röhl A (1999). Median-joining networks for
+> inferring intraspecific phylogenies. Mol Biol Evol 16(1):37–48.
 > https://doi.org/10.1093/oxfordjournals.molbev.a026036
 
 If you used TCS:
-> Clement, M., Posada, D. & Crandall, K.A. (2000). TCS: a computer program to
-> estimate gene genealogies. *Molecular Ecology*, 9(10), 1657–1659.
-> https://doi.org/10.1046/j.1365-294x.2000.01020.x
+> Clement M, Snell Q, Walke P, Posada D, Crandall K (2002). TCS:
+> estimating gene genealogies. Proc 16th Int Parallel Distrib Process
+> Symp 2:184.
 
 If you used IntNJ:
-> Leigh, J.W. & Bryant, D. (2015) — same as PopART citation above.
+> Leigh JW, Bryant D (2015). PopART: Full-feature software for haplotype
+> network construction. Methods Ecol Evol 6(9):1110–1116.
+> https://doi.org/10.1111/2041-210X.12410
 
 **PopART source code:** https://github.com/jessicawleigh/popart-current  
 **PopART license:** Lesser GNU Public License (LGPL)
