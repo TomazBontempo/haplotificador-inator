@@ -1,12 +1,22 @@
+/**
+ * @fileoverview
+ * Runs force-directed layout inside a Web Worker.
+ * Receives serialized Graph JSON and posts back the graph with updated positions.
+ */
+
 import Graph from "../model/Graph.js";
 import { computeLayout } from "../layout/NetworkLayout.js";
 
+/**
+ * Rebuilds a Graph instance from the plain data sent across the worker boundary.
+ */
 function reconstructGraph(graphJSON) {
   if (!graphJSON || !Array.isArray(graphJSON.vertices) || !Array.isArray(graphJSON.edges)) {
     throw new Error("Expected serialized Graph data.");
   }
 
   const graph = new Graph();
+  // Preserve original vertex indexes before rebuilding edges that refer to them.
   const vertices = [...graphJSON.vertices].sort((left, right) => left.index - right.index);
 
   for (const vertexJSON of vertices) {
@@ -24,6 +34,7 @@ function reconstructGraph(graphJSON) {
     }
   }
 
+  // Edge order is restored for stable serialized output after layout finishes.
   const edges = [...graphJSON.edges].sort((left, right) => left.index - right.index);
   for (const edgeJSON of edges) {
     const edge = graph.addEdge(
@@ -39,6 +50,9 @@ function reconstructGraph(graphJSON) {
   return graph;
 }
 
+/**
+ * Converts the laid-out Graph into plain data for postMessage.
+ */
 function serializeGraph(graph) {
   return {
     vertices: graph.vertices.map((vertex) => ({
@@ -50,6 +64,8 @@ function serializeGraph(graph) {
       x: vertex.x,
       y: vertex.y,
       radius: vertex.radius,
+      // Edge references are serialized by index because object identity cannot
+      // be shared with the main thread.
       incidentEdges: vertex.incidentEdges.map((edge) => edge.index),
     })),
     edges: graph.edges.map((edge) => ({
@@ -64,12 +80,14 @@ function serializeGraph(graph) {
   };
 }
 
-// Receives: { graphJSON, options }
-// Posts back: { graph } with updated vertex positions
-// Posts back: { error: message } on failure
+/**
+ * Handles one layout request and reports either a serialized graph or error.
+ */
 self.onmessage = (event) => {
   const { graphJSON, options } = event.data;
   try {
+    // Layout mutates vertex positions in place; reconstructing from JSON keeps
+    // the main thread's live graph untouched until the result is posted back.
     const graph = reconstructGraph(graphJSON);
     const layoutGraph = computeLayout(graph, options ?? {});
     self.postMessage({ graph: serializeGraph(layoutGraph) });

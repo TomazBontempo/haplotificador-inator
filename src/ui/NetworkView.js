@@ -1,3 +1,10 @@
+/**
+ * @fileoverview
+ * Main UI controller for Haplotificador-inator.
+ * Connects parser, model, algorithms, layout, renderer, storage, and export
+ * into a single browser application pipeline.
+ */
+
 import Graph from "../model/Graph.js";
 import HapNet from "../model/HapNet.js";
 import { applyUndefinedSiteMask } from "../model/SiteMask.js";
@@ -5,6 +12,8 @@ import { parseNexus } from "../parser/NexusParser.js";
 import { renderEdgeItem } from "../renderer/EdgeItem.js";
 import { renderNetwork } from "../renderer/NetworkRenderer.js";
 import { schemeSet3, schemeTableau10 } from "d3-scale-chromatic";
+
+// ─── State ────────────────────────────────────────────────────────────────
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
@@ -68,14 +77,23 @@ let progressDotIndex = 0;
 let panelAnimationTimers = new WeakMap();
 let temporaryStatusTimer = null;
 
+/**
+ * Replaces runtime collaborators for focused UI tests.
+ */
 export function __setNetworkViewDependencies(overrides = {}) {
   dependencies = { ...dependencies, ...overrides };
 }
 
+/**
+ * Restores production collaborators after a test override.
+ */
 export function __resetNetworkViewDependencies() {
   dependencies = { ...defaultDependencies };
 }
 
+/**
+ * Creates the canonical empty application state.
+ */
 function createInitialState() {
   return {
     currentFile: null,
@@ -128,6 +146,9 @@ function createInitialState() {
 
 export const state = createInitialState();
 
+/**
+ * Resets mutable state and transient interaction flags for a fresh session.
+ */
 function resetState() {
   const next = createInitialState();
   for (const key of Object.keys(state)) {
@@ -148,6 +169,11 @@ function resetState() {
   updateUndoRedoButtons();
 }
 
+// ─── Toolbar and UI wiring ────────────────────────────────────────────────
+
+/**
+ * Builds the controls shown in the right-side visual settings panel.
+ */
 function visualsPanelMarkup() {
   return `
     <div id="visuals-panel-content">
@@ -212,6 +238,9 @@ function visualsPanelMarkup() {
   `;
 }
 
+/**
+ * Replaces the properties panel with the default visual controls.
+ */
 function renderVisualsPanel() {
   const propsContent = byId("props-content");
   if (propsContent) {
@@ -219,6 +248,9 @@ function renderVisualsPanel() {
   }
 }
 
+/**
+ * Builds the static application shell used by browser and DOM tests.
+ */
 function appShell() {
   return `
     <div id="app">
@@ -402,16 +434,25 @@ function appShell() {
   `;
 }
 
+/**
+ * Installs the application shell once when the page is still empty.
+ */
 function ensureAppShell() {
   if (!document.getElementById("app")) {
     document.body.innerHTML = appShell();
   }
 }
 
+/**
+ * Looks up a DOM element by id.
+ */
 function byId(id) {
   return document.getElementById(id);
 }
 
+/**
+ * Provides tabbed help text for the in-app help dialog.
+ */
 function buildHelpContent() {
   const helpContent = {
     quickstart: `
@@ -561,14 +602,25 @@ function buildHelpContent() {
 
 const helpContent = buildHelpContent();
 
+/**
+ * Removes focus from controls after mouse activation.
+ */
 function blurClickedControl(event) {
   event.currentTarget?.blur?.();
 }
 
+/**
+ * Toggles the shared hidden class on optional elements.
+ */
 function setHidden(element, hidden) {
   element?.classList.toggle("hidden", hidden);
 }
 
+// ─── Save / Load ──────────────────────────────────────────────────────────
+
+/**
+ * Loads the storage module lazily so tests can inject a fake storage layer.
+ */
 function getStorageModule() {
   if (dependencies.storage) {
     return Promise.resolve(dependencies.storage);
@@ -579,6 +631,11 @@ function getStorageModule() {
   return storageModulePromise;
 }
 
+// ─── Toolbar and UI wiring ────────────────────────────────────────────────
+
+/**
+ * Replaces the canvas with a simple status message.
+ */
 function showMessage(message) {
   const container = byId("svg-container");
   if (container) {
@@ -589,6 +646,9 @@ function showMessage(message) {
   }
 }
 
+/**
+ * Restores the initial canvas prompt when no network is loaded.
+ */
 function showEmptyCanvasMessage() {
   const container = byId("svg-container");
   if (!container) {
@@ -602,6 +662,9 @@ function showEmptyCanvasMessage() {
   container.appendChild(emptyState);
 }
 
+/**
+ * Stops the animated ellipsis used by long-running progress states.
+ */
 function clearProgressDotsInterval() {
   if (progressDotsInterval) {
     clearInterval(progressDotsInterval);
@@ -609,6 +672,9 @@ function clearProgressDotsInterval() {
   }
 }
 
+/**
+ * Starts the animated ellipsis for the progress overlay.
+ */
 function startProgressDotsInterval() {
   const dotStates = [".", "..", "..."];
   clearProgressDotsInterval();
@@ -621,6 +687,9 @@ function startProgressDotsInterval() {
   }, 400);
 }
 
+/**
+ * Updates the active progress stage and bar fill.
+ */
 function setProgressStage(stageNumber, stageText) {
   const stageElement = byId("progress-stage-text");
   const dots = byId("progress-dots");
@@ -638,6 +707,9 @@ function setProgressStage(stageNumber, stageText) {
   }
 }
 
+/**
+ * Shows the cancellable progress overlay from a clean visual state.
+ */
 function showProgressOverlay() {
   const progressBarFill = byId("progress-bar-fill");
   const stageElement = byId("progress-stage-text");
@@ -646,6 +718,7 @@ function showProgressOverlay() {
   setHidden(byId("progress-overlay"), false);
   if (progressBarFill) {
     progressBarFill.style.width = "0%";
+    // Reading layout here lets the CSS transition start from a visible zero.
     progressBarFill.getBoundingClientRect();
   }
   if (stageElement) {
@@ -658,6 +731,9 @@ function showProgressOverlay() {
   startProgressDotsInterval();
 }
 
+/**
+ * Hides progress feedback and clears its timer state.
+ */
 function hideProgressOverlay() {
   const progressBarFill = byId("progress-bar-fill");
 
@@ -669,6 +745,11 @@ function hideProgressOverlay() {
   }
 }
 
+// ─── Save / Load ──────────────────────────────────────────────────────────
+
+/**
+ * Reads a browser File object with a FileReader fallback for older test shims.
+ */
 function readFileText(file) {
   if (!file) {
     return Promise.reject(new Error("No file selected."));
@@ -686,6 +767,9 @@ function readFileText(file) {
   });
 }
 
+/**
+ * Converts a Graph into plain JSON for storage.
+ */
 function serializeGraph(graph) {
   if (!graph) {
     return null;
@@ -715,6 +799,9 @@ function serializeGraph(graph) {
   };
 }
 
+/**
+ * Rehydrates a stored graph while preserving saved vertex and edge metadata.
+ */
 function reconstructGraph(graphJSON) {
   if (
     !graphJSON ||
@@ -729,6 +816,7 @@ function reconstructGraph(graphJSON) {
     (left, right) => left.index - right.index,
   );
 
+  // Saved vertices are sorted so Graph indices match the stored edge endpoints.
   for (const vertexJSON of vertices) {
     const vertex = graph.addVertex(
       vertexJSON.label ?? "",
@@ -750,6 +838,7 @@ function reconstructGraph(graphJSON) {
   const edges = [...graphJSON.edges].sort(
     (left, right) => left.index - right.index,
   );
+  // Edges are added after all vertices exist because Graph stores references.
   for (const edgeJSON of edges) {
     const edge = graph.addEdge(
       graph.vertex(edgeJSON.from),
@@ -764,11 +853,17 @@ function reconstructGraph(graphJSON) {
   return graph;
 }
 
+/**
+ * Returns a safe base filename for exports.
+ */
 function filenameBase() {
   const filename = state.currentFile?.name ?? "network";
   return filename.replace(/\.[^.]*$/, "") || "network";
 }
 
+/**
+ * Converts a site mask into the zero-based indices hidden by PopART rules.
+ */
 function maskedSiteIndicesFromMask(mask) {
   if (!Array.isArray(mask)) {
     return [];
@@ -783,6 +878,9 @@ function maskedSiteIndicesFromMask(mask) {
   return indices;
 }
 
+/**
+ * Keeps only valid persisted mask indices.
+ */
 function normalizeMaskedSiteIndices(indices) {
   if (!Array.isArray(indices)) {
     return [];
@@ -791,6 +889,9 @@ function normalizeMaskedSiteIndices(indices) {
   return indices.filter((index) => Number.isInteger(index) && index >= 0);
 }
 
+/**
+ * Restores saved mask indices or derives them for older project files.
+ */
 function restoreMaskedSiteIndices(savedState) {
   const savedIndices = normalizeMaskedSiteIndices(savedState.maskedSiteIndices);
   if (savedIndices.length > 0 || Array.isArray(savedState.maskedSiteIndices)) {
@@ -802,6 +903,7 @@ function restoreMaskedSiteIndices(savedState) {
   }
 
   try {
+    // Older saves did not store explicit indices, so recomputing preserves UI warnings.
     const { mask } = dependencies.applyUndefinedSiteMask(savedState.parsedNexus);
     return maskedSiteIndicesFromMask(mask);
   } catch (error) {
@@ -810,6 +912,9 @@ function restoreMaskedSiteIndices(savedState) {
   }
 }
 
+/**
+ * Builds the complete serializable project state for auto-save and Save As.
+ */
 export function buildSaveState() {
   return {
     version: 1,
@@ -834,6 +939,11 @@ export function buildSaveState() {
   };
 }
 
+// ─── Toolbar and UI wiring ────────────────────────────────────────────────
+
+/**
+ * Closes all transient menus and dialogs.
+ */
 function closeMenusAndModals() {
   setHidden(byId("file-menu"), true);
   setHidden(byId("algorithm-modal"), true);
@@ -842,10 +952,16 @@ function closeMenusAndModals() {
   setHidden(byId("help-modal"), true);
 }
 
+/**
+ * Closes the File dropdown.
+ */
 function closeFileMenu() {
   setHidden(byId("file-menu"), true);
 }
 
+/**
+ * Toggles the File dropdown.
+ */
 function toggleFileMenu() {
   const fileMenu = byId("file-menu");
   if (fileMenu) {
@@ -853,6 +969,9 @@ function toggleFileMenu() {
   }
 }
 
+/**
+ * Switches the help dialog to a known tab.
+ */
 function setActiveHelpTab(tab) {
   const activeTab = helpContent[tab] ? tab : "quickstart";
   document.querySelectorAll(".help-tab").forEach((button) => {
@@ -865,16 +984,27 @@ function setActiveHelpTab(tab) {
   }
 }
 
+/**
+ * Opens help on the default quick-start tab.
+ */
 function openHelpModal() {
   closeFileMenu();
   setActiveHelpTab("quickstart");
   setHidden(byId("help-modal"), false);
 }
 
+/**
+ * Closes the help dialog.
+ */
 function closeHelpModal() {
   setHidden(byId("help-modal"), true);
 }
 
+// ─── Save / Load ──────────────────────────────────────────────────────────
+
+/**
+ * Saves the project to its file handle when available and always refreshes auto-save.
+ */
 export async function save() {
   const storage = await getStorageModule();
   const saveState = buildSaveState();
@@ -888,6 +1018,9 @@ export async function save() {
   syncStatusBar();
 }
 
+/**
+ * Prompts for a .hapnet destination and stores the handle for future saves.
+ */
 export async function saveAsProject() {
   const storage = await getStorageModule();
   const isFirefoxFallback = typeof window !== "undefined" && !window.showSaveFilePicker;
@@ -905,12 +1038,18 @@ export async function saveAsProject() {
   return fileHandle;
 }
 
+/**
+ * Records that the current state has been persisted.
+ */
 function markSaved(status = "Saved") {
   state.lastSaved = new Date();
   state.saveStatus = status;
   state.hasUnsavedChanges = false;
 }
 
+/**
+ * Temporarily overrides the save status text before returning to the true state.
+ */
 function showTemporaryStatus(message, duration = 3000) {
   const statusSave = byId("status-save");
   if (!statusSave) {
@@ -928,24 +1067,41 @@ function showTemporaryStatus(message, duration = 3000) {
   }, duration);
 }
 
+// ─── Visuals ──────────────────────────────────────────────────────────────
+
+/**
+ * Restricts zoom to the supported canvas range.
+ */
 function clampZoom(value) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(2))));
 }
 
+/**
+ * Applies a new zoom level and records it as a visual change.
+ */
 function setZoom(value) {
   state.visualOptions.zoom = clampZoom(value);
   applyViewportTransform();
   markVisualChange();
 }
 
+/**
+ * Increases the viewport zoom by one step.
+ */
 function zoomIn() {
   setZoom(state.visualOptions.zoom + ZOOM_STEP);
 }
 
+/**
+ * Decreases the viewport zoom by one step.
+ */
 function zoomOut() {
   setZoom(state.visualOptions.zoom - ZOOM_STEP);
 }
 
+/**
+ * Computes the visible radius used when fitting the graph to the viewport.
+ */
 function vertexRadiusForFit(vertex) {
   const explicitRadius = Number(vertex.radius);
   if (Number.isFinite(explicitRadius) && explicitRadius > 0) {
@@ -960,6 +1116,9 @@ function vertexRadiusForFit(vertex) {
   );
 }
 
+/**
+ * Measures the graph extents including node radii.
+ */
 function graphVertexBounds() {
   const vertices = state.graph?.vertices ?? [];
   if (vertices.length === 0) {
@@ -994,6 +1153,9 @@ function graphVertexBounds() {
   };
 }
 
+/**
+ * Centers and scales the current graph to fit inside the SVG viewport.
+ */
 function zoomFit() {
   const svg = currentSvg();
   const bounds = graphVertexBounds();
@@ -1026,6 +1188,9 @@ function zoomFit() {
   markVisualChange();
 }
 
+/**
+ * Applies persisted zoom and pan to the rendered viewport group.
+ */
 function applyViewportTransform() {
   const svg = byId("svg-container")?.querySelector("svg");
   if (!svg) {
@@ -1042,6 +1207,11 @@ function applyViewportTransform() {
   }
 }
 
+// ─── Toolbar and UI wiring ────────────────────────────────────────────────
+
+/**
+ * Mirrors collapsed panel state into CSS variables and button affordances.
+ */
 function syncPanelState() {
   const dataPanel = byId("data-panel");
   const propsPanel = byId("properties-panel");
@@ -1076,6 +1246,9 @@ function syncPanelState() {
   }
 }
 
+/**
+ * Updates the footer with file, graph, masking, and save status.
+ */
 function syncStatusBar() {
   const filename = state.currentFile?.name ?? "No file loaded";
   byId("status-filename").textContent = filename;
@@ -1101,6 +1274,11 @@ function syncStatusBar() {
   }
 }
 
+// ─── Save / Load ──────────────────────────────────────────────────────────
+
+/**
+ * Shows the mandatory site-mask acknowledgement before the user proceeds.
+ */
 function showSiteMaskWarning() {
   return new Promise((resolve) => {
     const modal = byId("sitemask-modal");
@@ -1124,6 +1302,9 @@ function showSiteMaskWarning() {
   });
 }
 
+/**
+ * Asks how to handle unsaved work before replacing the current project.
+ */
 function showUnsavedChangesWarning(filename) {
   return new Promise((resolve) => {
     const modal = byId("unsaved-modal");
@@ -1163,6 +1344,9 @@ function showUnsavedChangesWarning(filename) {
   });
 }
 
+/**
+ * Saves, discards, or cancels before an operation that would replace state.
+ */
 async function checkUnsavedChanges() {
   if (!state.hasUnsavedChanges) {
     return "proceed";
@@ -1202,10 +1386,18 @@ async function checkUnsavedChanges() {
   return "cancel";
 }
 
+// ─── Toolbar and UI wiring ────────────────────────────────────────────────
+
+/**
+ * Removes all children from an optional DOM element.
+ */
 function clearElement(element) {
   element?.replaceChildren();
 }
 
+/**
+ * Builds an empty-state paragraph for the data panel.
+ */
 function dataPlaceholder(message) {
   const paragraph = document.createElement("p");
   paragraph.className = "data-placeholder";
@@ -1213,11 +1405,17 @@ function dataPlaceholder(message) {
   return paragraph;
 }
 
+/**
+ * Reads a numeric trait cell with invalid values treated as zero.
+ */
 function numericTraitValue(values, index) {
   const value = Number(values?.[index] ?? 0);
   return Number.isFinite(value) ? value : 0;
 }
 
+/**
+ * Creates one data-panel grid cell.
+ */
 function createDataCell(className, text) {
   const cell = document.createElement("div");
   cell.className = className;
@@ -1225,6 +1423,9 @@ function createDataCell(className, text) {
   return cell;
 }
 
+/**
+ * Builds one expandable trait summary row and its sample child rows.
+ */
 function createTraitRow({ label, sequenceCount, sampleCount, children }) {
   const row = document.createElement("div");
   row.className = "trait-row";
@@ -1272,6 +1473,9 @@ function createTraitRow({ label, sequenceCount, sampleCount, children }) {
   return [row, ...childRows];
 }
 
+/**
+ * Renders trait labels and per-taxon counts into the data panel.
+ */
 function buildTraitsTab(container, traits, taxa) {
   clearElement(container);
 
@@ -1332,6 +1536,9 @@ function buildTraitsTab(container, traits, taxa) {
   container.appendChild(tree);
 }
 
+/**
+ * Maps an alignment character to the CSS class used for coloring bases.
+ */
 function getNucClass(base, positionIndex, maskedIndices) {
   if (maskedIndices && maskedIndices.includes(positionIndex)) {
     return "nuc-gap";
@@ -1352,6 +1559,9 @@ function getNucClass(base, positionIndex, maskedIndices) {
   }
 }
 
+/**
+ * Renders the sequence alignment with masked sites visually distinguished.
+ */
 function buildAlignmentTab(container, characters, taxa, maskedSiteIndices = []) {
   clearElement(container);
 
@@ -1400,6 +1610,9 @@ function buildAlignmentTab(container, characters, taxa, maskedSiteIndices = []) 
   container.appendChild(table);
 }
 
+/**
+ * Switches the data panel between traits and alignment.
+ */
 function activateDataTab(tabName) {
   const traitsButton = byId("tab-traits");
   const alignmentButton = byId("tab-alignment");
@@ -1413,6 +1626,9 @@ function activateDataTab(tabName) {
   setHidden(alignmentContent, showTraits);
 }
 
+/**
+ * Rebuilds the data panel from the currently parsed Nexus file.
+ */
 export function updateDataView() {
   const traitsContent = byId("tab-content-traits");
   const alignmentContent = byId("tab-content-alignment");
@@ -1443,6 +1659,11 @@ export function updateDataView() {
   activateDataTab("traits");
 }
 
+// ─── Pipeline ─────────────────────────────────────────────────────────────
+
+/**
+ * Creates a module worker using the injected Worker class.
+ */
 function createModuleWorker(relativePath) {
   if (!dependencies.WorkerClass) {
     throw new Error("Web Workers are not supported in this browser.");
@@ -1452,6 +1673,9 @@ function createModuleWorker(relativePath) {
   });
 }
 
+/**
+ * Reports whether tests supplied a custom Worker implementation.
+ */
 function hasInjectedWorkerClass() {
   return (
     dependencies.WorkerClass &&
@@ -1459,6 +1683,9 @@ function hasInjectedWorkerClass() {
   );
 }
 
+/**
+ * Terminates any active algorithm or layout worker.
+ */
 function terminateWorkers() {
   algorithmWorker?.terminate();
   layoutWorker?.terminate();
@@ -1466,12 +1693,18 @@ function terminateWorkers() {
   layoutWorker = null;
 }
 
+/**
+ * Stops active computation and returns the canvas to a user-visible state.
+ */
 function cancelComputation() {
   terminateWorkers();
   hideProgressOverlay();
   showMessage("Computation cancelled.");
 }
 
+/**
+ * Sends a payload to a worker and resolves with its graph result.
+ */
 function workerResult(worker, payload) {
   return new Promise((resolve, reject) => {
     worker.onmessage = (event) => {
@@ -1488,10 +1721,18 @@ function workerResult(worker, payload) {
   });
 }
 
+// ─── Visuals ──────────────────────────────────────────────────────────────
+
+/**
+ * Renders the current graph through the shared rerender path.
+ */
 function renderGraph() {
   return rerenderNetwork();
 }
 
+/**
+ * Injects interaction styling that belongs to the UI layer, not the renderer.
+ */
 function applySvgVisualTheme(svg) {
   if (!svg) {
     return;
@@ -1519,6 +1760,9 @@ function applySvgVisualTheme(svg) {
   svg.prepend(style);
 }
 
+/**
+ * Recreates the SVG network and reattaches all interaction handlers.
+ */
 function rerenderNetwork() {
   if (!state.graph) {
     return null;
@@ -1540,6 +1784,9 @@ function rerenderNetwork() {
   return svg;
 }
 
+/**
+ * Synchronizes a toolbar toggle button with visual state.
+ */
 function syncToggleButton(button, active, disabled = false) {
   if (!button) {
     return;
@@ -1550,6 +1797,9 @@ function syncToggleButton(button, active, disabled = false) {
   button.setAttribute("aria-pressed", active ? "true" : "false");
 }
 
+/**
+ * Applies label and legend visibility to the current SVG.
+ */
 function applyVisualVisibilityState(svg = currentSvg()) {
   const showLabels = state.visualOptions.showLabels !== false;
   const showLegend = state.visualOptions.showLegend !== false;
@@ -1573,6 +1823,9 @@ function applyVisualVisibilityState(svg = currentSvg()) {
   syncToggleButton(legendButton, showLegend);
 }
 
+/**
+ * Toggles haplotype labels in the rendered network.
+ */
 function toggleLabels(event) {
   state.visualOptions.showLabels = !(state.visualOptions.showLabels !== false);
   applyVisualVisibilityState();
@@ -1580,6 +1833,9 @@ function toggleLabels(event) {
   markVisualChange();
 }
 
+/**
+ * Toggles the trait legend when the current network has one.
+ */
 function toggleLegend(event) {
   const svg = currentSvg();
   const legend = svg?.querySelector("#network-legend") ?? null;
@@ -1595,6 +1851,9 @@ function toggleLegend(event) {
   markVisualChange();
 }
 
+/**
+ * Creates a lighter or darker variant when the categorical palettes run out.
+ */
 function varyHexLightness(hex, step) {
   const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (!match) {
@@ -1613,6 +1872,9 @@ function varyHexLightness(hex, step) {
   return `#${channels.join("")}`;
 }
 
+/**
+ * Chooses a stable categorical color for a trait index.
+ */
 function colorForTraitIndex(index, traitCount) {
   if (traitCount <= 10) {
     return schemeTableau10[index];
@@ -1632,6 +1894,9 @@ function colorForTraitIndex(index, traitCount) {
   return varyHexLightness(base, variationStep);
 }
 
+/**
+ * Assigns default trait colors whenever the current dataset changes.
+ */
 function assignTraitColors(hapNet) {
   const traitCount = hapNet?.traitNames?.length ?? 0;
   const vertices = state.visualOptions.vertices ?? {};
@@ -1651,6 +1916,11 @@ function assignTraitColors(hapNet) {
   };
 }
 
+// ─── Save / Load ──────────────────────────────────────────────────────────
+
+/**
+ * Persists the current project to IndexedDB without interrupting the user.
+ */
 async function autoSaveCurrentState(status = "Auto-saved") {
   if (!state.graph) {
     return;
@@ -1668,18 +1938,29 @@ async function autoSaveCurrentState(status = "Auto-saved") {
   }
 }
 
+/**
+ * Marks the project dirty and refreshes the status bar.
+ */
 function markUnsavedChanges() {
   state.hasUnsavedChanges = true;
   state.saveStatus = "Unsaved changes";
   syncStatusBar();
 }
 
+/**
+ * Marks a visual edit dirty only after a graph exists.
+ */
 function markVisualChange() {
   if (state.graph) {
     markUnsavedChanges();
   }
 }
 
+// ─── Visuals ──────────────────────────────────────────────────────────────
+
+/**
+ * Captures graph positions and visual options for undo or redo.
+ */
 function createHistorySnapshot(type) {
   if (!state.graph) {
     return null;
@@ -1696,12 +1977,18 @@ function createHistorySnapshot(type) {
   };
 }
 
+/**
+ * Enforces the fixed-size undo history limit.
+ */
 function trimUndoStack() {
   if (state.history.undoStack.length > 20) {
     state.history.undoStack.shift();
   }
 }
 
+/**
+ * Enables or disables undo and redo toolbar buttons.
+ */
 function updateUndoRedoButtons() {
   const undoButton = byId("undo-btn");
   const redoButton = byId("redo-btn");
@@ -1713,12 +2000,18 @@ function updateUndoRedoButtons() {
   }
 }
 
+/**
+ * Clears all undo and redo snapshots for a new graph.
+ */
 function clearHistory() {
   state.history.undoStack = [];
   state.history.redoStack = [];
   updateUndoRedoButtons();
 }
 
+/**
+ * Stores the current state before a user-editable change.
+ */
 function pushUndoSnapshot(type) {
   const snapshot = createHistorySnapshot(type);
   if (!snapshot) {
@@ -1731,6 +2024,9 @@ function pushUndoSnapshot(type) {
   updateUndoRedoButtons();
 }
 
+/**
+ * Restores graph positions and visual options from a history snapshot.
+ */
 function restoreSnapshot(snapshot) {
   if (!snapshot || !state.graph) {
     return;
@@ -1749,6 +2045,9 @@ function restoreSnapshot(snapshot) {
   state.visualOptions = JSON.parse(JSON.stringify(snapshot.visualOptions));
 }
 
+/**
+ * Reverts the most recent visual or node-position edit.
+ */
 function undo() {
   if (state.history.undoStack.length === 0) {
     return;
@@ -1766,6 +2065,9 @@ function undo() {
   updateUndoRedoButtons();
 }
 
+/**
+ * Reapplies the most recently undone visual or node-position edit.
+ */
 function redo() {
   if (state.history.redoStack.length === 0) {
     return;
@@ -1784,12 +2086,18 @@ function redo() {
   updateUndoRedoButtons();
 }
 
+/**
+ * Returns the active mutation display style for edges.
+ */
 function edgeDisplayMode() {
   return state.visualOptions.edges?.displayMode === "ticks"
     ? "ticks"
     : "labels";
 }
 
+/**
+ * Rebuilds trait color inputs from the current HapNet metadata.
+ */
 function updateTraitColorPickers() {
   const list = byId("visual-traits-list");
   if (!list) {
@@ -1825,6 +2133,7 @@ function updateTraitColorPickers() {
       state.visualOptions.vertices.traitColors[index] = input.value;
     }
     input.addEventListener("mousedown", () => {
+      // Snapshot before the color picker opens so undo returns to the pre-edit color.
       pushUndoSnapshot("color");
     });
     input.addEventListener("change", (event) => {
@@ -1842,6 +2151,9 @@ function updateTraitColorPickers() {
   });
 }
 
+/**
+ * Copies visual state into form controls and toggle buttons.
+ */
 function syncVisualsPanel() {
   const visualOptions = state.visualOptions;
   visualOptions.labelOffsets = normalizeLabelOffsets(
@@ -1883,8 +2195,12 @@ function syncVisualsPanel() {
   applyVisualVisibilityState();
 }
 
+/**
+ * Wires all visual customization controls in the properties panel.
+ */
 function initVisualsPanel() {
   byId("visual-edge-color")?.addEventListener("mousedown", () => {
+    // Snapshot on pointer-down catches the color before native pickers mutate it.
     pushUndoSnapshot("color");
   });
   byId("visual-edge-color")?.addEventListener("change", (event) => {
@@ -1898,6 +2214,7 @@ function initVisualsPanel() {
   });
 
   byId("visual-edge-width")?.addEventListener("mousedown", () => {
+    // Width sliders emit many input events, but one undo step should cover the drag.
     pushUndoSnapshot("width");
   });
   byId("visual-edge-width")?.addEventListener("input", (event) => {
@@ -1932,6 +2249,7 @@ function initVisualsPanel() {
   });
 
   byId("visual-inferred-color")?.addEventListener("mousedown", () => {
+    // Snapshot before the picker opens keeps undo independent from browser timing.
     pushUndoSnapshot("color");
   });
   byId("visual-inferred-color")?.addEventListener("change", (event) => {
@@ -1945,6 +2263,7 @@ function initVisualsPanel() {
   });
 
   byId("visual-font-size")?.addEventListener("mousedown", () => {
+    // Font-size changes are previewed live, so the drag should remain one history item.
     pushUndoSnapshot("font");
   });
   byId("visual-font-size")?.addEventListener("input", (event) => {
@@ -1966,6 +2285,9 @@ function initVisualsPanel() {
   });
 }
 
+/**
+ * Switches edge mutations between numeric labels and tick marks.
+ */
 function setEdgeDisplayMode(displayMode) {
   if (
     !["labels", "ticks"].includes(displayMode) ||
@@ -1985,6 +2307,11 @@ function setEdgeDisplayMode(displayMode) {
   syncVisualsPanel();
 }
 
+// ─── Pipeline ─────────────────────────────────────────────────────────────
+
+/**
+ * Runs parse, masking, HapNet construction, algorithm, layout, and render.
+ */
 export async function runCurrentPipeline() {
   if (!state.currentFile) {
     showMessage("Open a .nex file before running an algorithm.");
@@ -2018,6 +2345,7 @@ export async function runCurrentPipeline() {
           new URL("../workers/algorithmWorker.js", import.meta.url),
           { type: "module" },
         );
+    // Workers are recreated on every run because terminated workers cannot restart.
     setProgressStage(3, "Running " + state.algorithm);
     const algorithmGraphJSON = await workerResult(algorithmWorker, {
       algorithm: state.algorithm,
@@ -2046,6 +2374,7 @@ export async function runCurrentPipeline() {
     state.visualOptions.width = 1000;
     state.visualOptions.height = 1000;
     if (isFirstAlgorithmRunForFile) {
+      // A new graph should use renderer default legend placement until the user moves it.
       state.visualOptions.legendPosition = null;
     }
     assignTraitColors(state.hapNet);
@@ -2064,6 +2393,11 @@ export async function runCurrentPipeline() {
   }
 }
 
+// ─── Save / Load ──────────────────────────────────────────────────────────
+
+/**
+ * Loads a Nexus file as a new project and prepares it for algorithm selection.
+ */
 async function handleNexusFileSelected(file) {
   if (!file) {
     return;
@@ -2072,6 +2406,7 @@ async function handleNexusFileSelected(file) {
   try {
     const storage = await getStorageModule();
     if (await storage.hasAutoSave()) {
+      // Opening a new Nexus project intentionally replaces the single auto-save slot.
       await storage.clearAutoSave();
     }
   } catch (error) {
@@ -2121,6 +2456,9 @@ async function handleNexusFileSelected(file) {
   syncStatusBar();
 }
 
+/**
+ * Loads a .hapnet project file and restores its saved graph directly.
+ */
 async function handleSavedProjectFileSelected(file) {
   if (!file) {
     return;
@@ -2134,12 +2472,18 @@ async function handleSavedProjectFileSelected(file) {
   }
 }
 
+/**
+ * Reports whether a dropped or selected file can be opened by this app.
+ */
 function isSupportedProjectFile(file) {
   const filename =
     typeof file?.name === "string" ? file.name.toLowerCase() : "";
   return filename.endsWith(".nex") || filename.endsWith(".hapnet");
 }
 
+/**
+ * Dispatches supported project files to the correct loading path.
+ */
 async function handleOpenFileSelected(file) {
   if (!file) {
     return;
@@ -2158,6 +2502,9 @@ async function handleOpenFileSelected(file) {
   showMessage("Unsupported file format. Please open a .nex or .hapnet file.");
 }
 
+/**
+ * Applies unsaved-change guards before opening a replacement project file.
+ */
 async function openFileWithGuards(file) {
   if (!file) {
     return;
@@ -2182,6 +2529,9 @@ async function openFileWithGuards(file) {
   await handleOpenFileSelected(file);
 }
 
+/**
+ * Counts sampled vertices in a saved graph when HapNet metadata is absent.
+ */
 function sampledVertexCount(graph) {
   return (
     graph?.vertices?.filter((vertex) => vertex.info?.sampled !== false)
@@ -2189,6 +2539,9 @@ function sampledVertexCount(graph) {
   );
 }
 
+/**
+ * Reconstructs the small HapNet summary needed by UI labels and legends.
+ */
 function savedHapNetSummary(savedState) {
   const traitNames =
     savedState.hapNet?.traitNames ??
@@ -2209,6 +2562,9 @@ function savedHapNetSummary(savedState) {
   return null;
 }
 
+/**
+ * Normalizes persisted label offsets into finite graph-space coordinates.
+ */
 function normalizeLabelOffsets(labelOffsets = {}) {
   if (!labelOffsets || typeof labelOffsets !== "object") {
     return {};
@@ -2226,6 +2582,9 @@ function normalizeLabelOffsets(labelOffsets = {}) {
   return normalized;
 }
 
+/**
+ * Merges saved visual settings with current defaults for forward compatibility.
+ */
 function mergeVisualOptions(savedVisualOptions = {}) {
   return {
     ...state.visualOptions,
@@ -2248,6 +2607,9 @@ function mergeVisualOptions(savedVisualOptions = {}) {
   };
 }
 
+/**
+ * Applies a saved project state directly to UI, graph, and status models.
+ */
 function applySavedState(savedState, status = "Saved") {
   state.currentFile = savedState.originalFilename
     ? { name: savedState.originalFilename }
@@ -2275,6 +2637,9 @@ function applySavedState(savedState, status = "Saved") {
   syncStatusBar();
 }
 
+/**
+ * Opens a saved project through the storage module's file picker.
+ */
 async function loadSavedProject() {
   try {
     const check = await checkUnsavedChanges();
@@ -2294,10 +2659,18 @@ async function loadSavedProject() {
   }
 }
 
+// ─── Canvas interaction ───────────────────────────────────────────────────
+
+/**
+ * Returns the currently rendered network SVG.
+ */
 function currentSvg() {
   return byId("svg-container")?.querySelector("svg") ?? null;
 }
 
+/**
+ * Converts a pointer event into graph coordinates inside the viewport group.
+ */
 function getViewportPoint(event) {
   const svg = document.querySelector("#svg-container svg");
   if (!svg) return { x: 0, y: 0 };
@@ -2312,6 +2685,9 @@ function getViewportPoint(event) {
   return { x: transformed.x, y: transformed.y };
 }
 
+/**
+ * Reads the SVG's screen transform scale with safe defaults for DOM tests.
+ */
 function svgScreenScale() {
   const svg = currentSvg();
   const matrix = svg?.getScreenCTM?.();
@@ -2321,6 +2697,9 @@ function svgScreenScale() {
   };
 }
 
+/**
+ * Converts screen movement into graph-space movement using current zoom.
+ */
 function screenDeltaToGraphDelta(dx, dy) {
   return {
     x: dx / state.visualOptions.zoom,
@@ -2328,6 +2707,9 @@ function screenDeltaToGraphDelta(dx, dy) {
   };
 }
 
+/**
+ * Converts screen movement into SVG viewport movement.
+ */
 function screenDeltaToViewportDelta(dx, dy) {
   const scale = svgScreenScale();
   return {
@@ -2336,6 +2718,9 @@ function screenDeltaToViewportDelta(dx, dy) {
   };
 }
 
+/**
+ * Converts a pointer event to graph coordinates with a test-friendly fallback.
+ */
 function svgPoint(event) {
   const svg = currentSvg();
   if (!svg) {
@@ -2357,6 +2742,7 @@ function svgPoint(event) {
 
   const rect = svg.getBoundingClientRect();
   const scale = svgScreenScale();
+  // jsdom lacks SVG matrices, so tests fall back to bounding-box math.
   return {
     x:
       ((event.clientX - rect.left) / scale.x - state.visualOptions.panX) /
@@ -2367,6 +2753,9 @@ function svgPoint(event) {
   };
 }
 
+/**
+ * Clears selected SVG elements and synchronizes the properties panel.
+ */
 function clearSelection() {
   currentSvg()
     ?.querySelectorAll(".selected")
@@ -2377,16 +2766,25 @@ function clearSelection() {
   syncVisualsPanel();
 }
 
+/**
+ * Returns selected SVG elements that represent vertices.
+ */
 function selectedVertexElements() {
   return state.selectedElements.filter((element) =>
     element.classList?.contains("vertex"),
   );
 }
 
+/**
+ * Refreshes the properties panel after a selection change.
+ */
 function updatePropertiesPanel() {
   syncVisualsPanel();
 }
 
+/**
+ * Selects one rendered graph element, optionally preserving prior selection.
+ */
 function selectGraphElement(element, additive = false) {
   if (!additive) {
     clearSelection();
@@ -2398,6 +2796,9 @@ function selectGraphElement(element, additive = false) {
   updatePropertiesPanel(element);
 }
 
+/**
+ * Suppresses the synthetic click that follows a completed drag gesture.
+ */
 function suppressUpcomingSvgClick() {
   suppressNextSvgClick = true;
   window.setTimeout(() => {
@@ -2405,6 +2806,9 @@ function suppressUpcomingSvgClick() {
   }, 0);
 }
 
+/**
+ * Re-renders a single edge after one of its vertices moves.
+ */
 function updateEdgeElement(edge) {
   const edgeElement = currentSvg()?.querySelector(
     `.edge[data-index="${edge.index}"]`,
@@ -2423,12 +2827,18 @@ function updateEdgeElement(edge) {
   edgeElement.replaceWith(replacement);
 }
 
+/**
+ * Finds the model vertex for a rendered vertex index.
+ */
 function vertexByIndex(index) {
   return (
     state.graph?.vertices?.find((vertex) => vertex.index === index) ?? null
   );
 }
 
+/**
+ * Reads an SVG translate transform as numeric coordinates.
+ */
 function svgTranslateCoordinates(element) {
   const transform = element.getAttribute("transform") ?? "";
   const match = transform.match(
@@ -2447,16 +2857,25 @@ function svgTranslateCoordinates(element) {
   return { x, y };
 }
 
+/**
+ * Finds a vertex label element from an event target.
+ */
 function labelElementFromEvent(event) {
   const target = event.target instanceof Element ? event.target : null;
   return target?.closest?.(".vertex-label") ?? null;
 }
 
+/**
+ * Converts a label offset attribute to a finite number.
+ */
 function numericLabelOffset(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
+/**
+ * Reads the current rendered offset for a vertex label.
+ */
 function labelOffsetFromElement(labelElement) {
   return {
     x: numericLabelOffset(labelElement.getAttribute("x"), 0),
@@ -2464,11 +2883,17 @@ function labelOffsetFromElement(labelElement) {
   };
 }
 
+/**
+ * Applies a graph-space offset to a rendered vertex label.
+ */
 function setLabelElementOffset(labelElement, offset) {
   labelElement?.setAttribute("x", String(offset.x));
   labelElement?.setAttribute("y", String(offset.y));
 }
 
+/**
+ * Starts dragging a label independently from its vertex.
+ */
 function beginLabelDrag(event, labelElement) {
   const vertexIndex = labelElement.dataset.vertexIndex;
   if (vertexIndex === undefined) {
@@ -2480,11 +2905,15 @@ function beginLabelDrag(event, labelElement) {
   labelDragStartMouse = svgPoint(event);
   labelDragStartOffset = labelOffsetFromElement(labelElement);
   labelDragElement = labelElement;
+  // Snapshot is taken before drag starts so undo restores the original offset.
   pushUndoSnapshot("labelDrag");
   event.stopPropagation();
   event.preventDefault();
 }
 
+/**
+ * Updates the rendered label offset while a label drag is active.
+ */
 function updateLabelDrag(event) {
   if (!isLabelDragging || !labelDragElement) {
     return;
@@ -2499,6 +2928,9 @@ function updateLabelDrag(event) {
   event.preventDefault();
 }
 
+/**
+ * Commits a completed label drag into visual options.
+ */
 function finishLabelDrag() {
   if (!isLabelDragging || labelDragVertexIndex === null || !labelDragElement) {
     isLabelDragging = false;
@@ -2521,6 +2953,9 @@ function finishLabelDrag() {
   markVisualChange();
 }
 
+/**
+ * Routes a left-button label press into the label-drag gesture.
+ */
 function handleLabelMousedown(event) {
   if (event.button !== 0) {
     return;
@@ -2532,6 +2967,9 @@ function handleLabelMousedown(event) {
   }
 }
 
+/**
+ * Applies a saved or live position to the legend group.
+ */
 function setLegendTransform(position) {
   const legend = currentSvg()?.querySelector("#network-legend");
   if (!legend || !position) {
@@ -2541,6 +2979,9 @@ function setLegendTransform(position) {
   legend.setAttribute("transform", `translate(${position.x}, ${position.y})`);
 }
 
+/**
+ * Starts dragging the legend from its current transform.
+ */
 function beginLegendDrag(event) {
   const legend = event.currentTarget;
   const currentPosition = svgTranslateCoordinates(legend) ?? { x: 0, y: 0 };
@@ -2556,6 +2997,9 @@ function beginLegendDrag(event) {
   event.stopPropagation();
 }
 
+/**
+ * Updates the rendered legend transform during a drag.
+ */
 function updateLegendDrag(event) {
   if (!isLegendDragging || !legendDragOffset) {
     return;
@@ -2570,6 +3014,9 @@ function updateLegendDrag(event) {
   event.preventDefault();
 }
 
+/**
+ * Stores the final legend position after a drag.
+ */
 function finishLegendDrag() {
   if (!isLegendDragging) {
     return;
@@ -2594,12 +3041,16 @@ function finishLegendDrag() {
     return;
   }
 
+  // Snapshot is delayed until the position actually changes to avoid empty undo steps.
   pushUndoSnapshot("legend");
   state.visualOptions.legendPosition = finalPosition;
   suppressUpcomingSvgClick();
   markVisualChange();
 }
 
+/**
+ * Copies dragged SVG vertex positions back into the graph model.
+ */
 function commitMovedVertexPositions() {
   for (const index of movedVertexIndices) {
     const element = currentSvg()?.querySelector(
@@ -2618,6 +3069,9 @@ function commitMovedVertexPositions() {
   movedVertexIndices.clear();
 }
 
+/**
+ * Moves all selected vertices and refreshes affected edges.
+ */
 function moveSelectedVertices(dx, dy) {
   const movedEdges = new Set();
   for (const element of selectedVertexElements()) {
@@ -2641,6 +3095,9 @@ function moveSelectedVertices(dx, dy) {
   }
 }
 
+/**
+ * Moves selected vertices relative to the primary dragged vertex.
+ */
 function moveDraggedVertices(event) {
   const primaryIndex = pendingVertexGesture?.primaryIndex;
   const vertex = vertexByIndex(primaryIndex);
@@ -2662,6 +3119,9 @@ function moveDraggedVertices(event) {
   moveSelectedVertices(delta.x, delta.y);
 }
 
+/**
+ * Starts drawing a rubber-band selection rectangle.
+ */
 function beginRubberBand(event) {
   const svg = currentSvg();
   if (!svg) {
@@ -2678,6 +3138,9 @@ function beginRubberBand(event) {
   isRubberBanding = true;
 }
 
+/**
+ * Resizes the rubber-band rectangle to the current pointer.
+ */
 function updateRubberBand(event) {
   if (!isRubberBanding || !rubberBandRect || !rubberBandStart) {
     return;
@@ -2697,6 +3160,9 @@ function updateRubberBand(event) {
   );
 }
 
+/**
+ * Selects vertices inside the completed rubber-band rectangle.
+ */
 function finishRubberBand() {
   if (!isRubberBanding || !rubberBandRect) {
     return;
@@ -2727,10 +3193,14 @@ function finishRubberBand() {
   rubberBandStart = null;
   isRubberBanding = false;
   if (wasRubberBandDrag) {
+    // The following click would otherwise clear the selection just created.
     suppressUpcomingSvgClick();
   }
 }
 
+/**
+ * Wires click, vertex drag, edge selection, and rubber-band behavior on an SVG.
+ */
 function wireSvgInteractions(svg) {
   svg.addEventListener("click", (event) => {
     if (suppressNextSvgClick) {
@@ -2793,12 +3263,18 @@ function wireSvgInteractions(svg) {
   });
 }
 
+/**
+ * Wires direct label mouse handlers after a rerender.
+ */
 function wireLabelInteractions(svg) {
   svg.querySelectorAll(".vertex-label").forEach((label) => {
     label.addEventListener("mousedown", handleLabelMousedown);
   });
 }
 
+/**
+ * Wires legend dragging after a rerender.
+ */
 function wireLegendInteractions(svg) {
   const legend = svg.querySelector("#network-legend");
   if (!legend) {
@@ -2812,10 +3288,18 @@ function wireLegendInteractions(svg) {
   });
 }
 
+// ─── Toolbar and UI wiring ────────────────────────────────────────────────
+
+/**
+ * Returns the currently selected algorithm radio input.
+ */
 function selectedAlgorithmInput() {
   return document.querySelector('input[name="algorithm"]:checked');
 }
 
+/**
+ * Renders parameter controls for the selected algorithm.
+ */
 function renderAlgorithmParams() {
   const selected = selectedAlgorithmInput()?.value ?? state.algorithm;
   const params = byId("algorithm-params");
@@ -2840,6 +3324,9 @@ function renderAlgorithmParams() {
   }
 }
 
+/**
+ * Opens the algorithm dialog with controls synchronized to state.
+ */
 function openAlgorithmModal() {
   const input = document.querySelector(
     `input[name="algorithm"][value="${state.algorithm}"]`,
@@ -2851,6 +3338,9 @@ function openAlgorithmModal() {
   setHidden(byId("algorithm-modal"), false);
 }
 
+/**
+ * Stores the algorithm dialog selection and reruns the pipeline for Nexus files.
+ */
 function storeAlgorithmSelection() {
   const algorithm = selectedAlgorithmInput()?.value ?? state.algorithm;
   state.algorithm = algorithm;
@@ -2872,10 +3362,16 @@ function storeAlgorithmSelection() {
   }
 }
 
+/**
+ * Opens the export dialog.
+ */
 function openExportModal() {
   setHidden(byId("export-modal"), false);
 }
 
+/**
+ * Exports the current graph in the format selected by the user.
+ */
 async function exportCurrentNetwork() {
   if (!state.graph) {
     setHidden(byId("export-modal"), true);
@@ -2907,6 +3403,9 @@ async function exportCurrentNetwork() {
   setHidden(byId("export-modal"), true);
 }
 
+/**
+ * Wires the hidden file input and File > Open command.
+ */
 function wireFileInputs() {
   const openInput = byId("open-file-input");
 
@@ -2925,6 +3424,9 @@ function wireFileInputs() {
   });
 }
 
+/**
+ * Wires top-level toolbar buttons and the File dropdown.
+ */
 function wireToolbar() {
   const fileMenu = byId("file-menu");
   const fileMenuButton = byId("file-menu-btn");
@@ -2992,6 +3494,9 @@ function wireToolbar() {
   byId("toggle-legend")?.addEventListener("click", toggleLegend);
 }
 
+/**
+ * Applies a short collapse animation class to a side panel.
+ */
 function startPanelAnimation(panel, collapsed) {
   if (!panel) {
     return;
@@ -3011,6 +3516,9 @@ function startPanelAnimation(panel, collapsed) {
   panelAnimationTimers.set(panel, timer);
 }
 
+/**
+ * Wires side-panel collapse controls.
+ */
 function wirePanels() {
   byId("collapse-data")?.addEventListener("click", (event) => {
     const collapsed = !state.dataPanelCollapsed;
@@ -3029,6 +3537,9 @@ function wirePanels() {
   });
 }
 
+/**
+ * Sets the data panel width while respecting the minimum usable size.
+ */
 function setDataPanelWidth(width) {
   dataPanelWidth = Math.max(MIN_PANEL_WIDTH, width);
   const dataPanel = byId("data-panel");
@@ -3046,6 +3557,9 @@ function setDataPanelWidth(width) {
   );
 }
 
+/**
+ * Sets the properties panel width while respecting the minimum usable size.
+ */
 function setPropsPanelWidth(width) {
   propsPanelWidth = Math.max(MIN_PANEL_WIDTH, width);
   const propsPanel = byId("properties-panel");
@@ -3060,6 +3574,9 @@ function setPropsPanelWidth(width) {
   );
 }
 
+/**
+ * Ends active panel resizing and restores normal selection behavior.
+ */
 function finishPanelResize() {
   if (!isResizingData) {
     return;
@@ -3073,6 +3590,9 @@ function finishPanelResize() {
   document.body.style.userSelect = "";
 }
 
+/**
+ * Wires drag resizing for the data side panel.
+ */
 function wirePanelResize() {
   byId("data-resize-handle")?.addEventListener("mousedown", (event) => {
     const dataPanel = byId("data-panel");
@@ -3101,6 +3621,9 @@ function wirePanelResize() {
   document.addEventListener("mouseup", finishPanelResize);
 }
 
+/**
+ * Wires the data panel tab buttons.
+ */
 function wireDataTabs() {
   byId("tab-traits")?.addEventListener("click", (event) => {
     activateDataTab("traits");
@@ -3112,6 +3635,9 @@ function wireDataTabs() {
   });
 }
 
+/**
+ * Wires modal buttons, tabs, and overlay dismissal behavior.
+ */
 function wireModals() {
   document.querySelectorAll('input[name="algorithm"]').forEach((input) => {
     input.addEventListener("change", renderAlgorithmParams);
@@ -3160,6 +3686,11 @@ function wireModals() {
   });
 }
 
+// ─── Save / Load ──────────────────────────────────────────────────────────
+
+/**
+ * Resolves the user's choice in the auto-save restore dialog.
+ */
 function restoreDialogChoice() {
   return new Promise((resolve) => {
     const modal = byId("restore-modal");
@@ -3193,10 +3724,16 @@ function restoreDialogChoice() {
   });
 }
 
+/**
+ * Reports whether the app is running under the automated test suite.
+ */
 function isTestEnvironment() {
   return typeof process !== "undefined" && process.env?.NODE_ENV === "test";
 }
 
+/**
+ * Offers to restore the single auto-save slot on startup.
+ */
 async function maybeOfferSessionRestore() {
   if (isTestEnvironment()) {
     return;
@@ -3225,6 +3762,11 @@ async function maybeOfferSessionRestore() {
   }
 }
 
+// ─── Toolbar and UI wiring ────────────────────────────────────────────────
+
+/**
+ * Wires the visible zoom controls.
+ */
 function wireZoomControls() {
   byId("zoom-in")?.addEventListener("click", (event) => {
     zoomIn();
@@ -3240,6 +3782,9 @@ function wireZoomControls() {
   });
 }
 
+/**
+ * Reapplies viewport transforms when the canvas container changes size.
+ */
 function wireResizeObserver() {
   const container = byId("svg-container");
   if (
@@ -3256,6 +3801,11 @@ function wireResizeObserver() {
   svgContainerResizeObserver.observe(container);
 }
 
+// ─── Canvas interaction ───────────────────────────────────────────────────
+
+/**
+ * Starts panning from the current pointer position.
+ */
 function beginPan(event, middleButton = false) {
   isPanning = true;
   isMiddleButtonPanning = middleButton;
@@ -3264,6 +3814,9 @@ function beginPan(event, middleButton = false) {
   byId("viewport")?.classList.add("panning");
 }
 
+/**
+ * Ends panning and restores the viewport cursor state.
+ */
 function endPan() {
   isPanning = false;
   isMiddleButtonPanning = false;
@@ -3271,14 +3824,23 @@ function endPan() {
   byId("viewport")?.classList.toggle("panning", spacePanMode);
 }
 
+/**
+ * Reports whether a drag event contains files.
+ */
 function isFileDragEvent(event) {
   return Array.from(event.dataTransfer?.types ?? []).includes("Files");
 }
 
+/**
+ * Clears the visual drop target state from the viewport.
+ */
 function clearFileDropActive() {
   byId("viewport")?.classList.remove("file-drop-active");
 }
 
+/**
+ * Wires drag-and-drop project loading on the viewport.
+ */
 function wireViewportFileDrop() {
   const viewport = byId("viewport");
   if (!viewport) {
@@ -3334,6 +3896,9 @@ function wireViewportFileDrop() {
   });
 }
 
+/**
+ * Wires viewport panning, zooming, selection, and drag gestures.
+ */
 function wireViewportInteractions() {
   const viewport = byId("viewport");
   if (!viewport) {
@@ -3389,6 +3954,7 @@ function wireViewportInteractions() {
       const movedDistance = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
 
       if (!isDraggingNodes && movedDistance > DRAG_THRESHOLD) {
+        // Snapshot after the drag threshold prevents ordinary clicks from polluting history.
         pushUndoSnapshot("drag");
         isDraggingNodes = true;
         if (!pendingVertexGesture.element.classList.contains("selected")) {
@@ -3464,6 +4030,11 @@ function wireViewportInteractions() {
   });
 }
 
+// ─── Save / Load ──────────────────────────────────────────────────────────
+
+/**
+ * Starts periodic auto-save outside the test environment.
+ */
 function startAutoSaveTimer() {
   if (autoSaveTimer || typeof window === "undefined" || isTestEnvironment()) {
     return;
@@ -3476,6 +4047,11 @@ function startAutoSaveTimer() {
   }, AUTO_SAVE_INTERVAL);
 }
 
+// ─── Toolbar and UI wiring ────────────────────────────────────────────────
+
+/**
+ * Wires global keyboard shortcuts for save, undo, zoom, pan, and dismissal.
+ */
 function wireKeyboardShortcuts() {
   document.addEventListener("keydown", (event) => {
     if (event.code === "Space" && !event.repeat) {
@@ -3536,6 +4112,9 @@ function wireKeyboardShortcuts() {
   });
 }
 
+/**
+ * Initializes the UI controller and returns the shared application state.
+ */
 export function initNetworkView() {
   ensureAppShell();
   const app = byId("app");

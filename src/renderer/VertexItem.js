@@ -1,3 +1,9 @@
+/**
+ * @fileoverview
+ * Renders one graph vertex as an SVG group.
+ * Receives vertex data plus visual options and returns SVG node markup.
+ */
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_FILL = "#999999";
 const INFERRED_FILL = "#333333";
@@ -5,19 +11,31 @@ const DEFAULT_STROKE = "#333333";
 const DEFAULT_LABEL_FILL = "#333333";
 const DEFAULT_BASE_RADIUS = 10;
 
+/**
+ * Creates SVG elements in the correct namespace for browser rendering.
+ */
 function createSvgElement(name) {
   return document.createElementNS(SVG_NS, name);
 }
 
+/**
+ * Converts loose vertex metadata to a finite number with a fallback.
+ */
 function numericValue(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
+/**
+ * Reads the sampled frequency that controls PopART-style vertex area.
+ */
 export function vertexFrequency(vertex) {
   return Math.max(0, numericValue(vertex.info?.frequency ?? vertex.info?.freq, 1));
 }
 
+/**
+ * Returns the rendered radius, preferring layout's persisted radius when present.
+ */
 export function vertexRadius(vertex, baseRadius) {
   const radius = numericValue(vertex.radius, Number.NaN);
   if (Number.isFinite(radius) && radius > 0) {
@@ -27,6 +45,9 @@ export function vertexRadius(vertex, baseRadius) {
   return baseRadius * Math.sqrt(vertexFrequency(vertex));
 }
 
+/**
+ * Normalizes trait counts into positive pie-slice entries.
+ */
 function traitEntries(traits) {
   if (!traits) {
     return [];
@@ -41,6 +62,9 @@ function traitEntries(traits) {
     .filter((entry) => entry.value > 0);
 }
 
+/**
+ * Appends a plain sampled vertex circle.
+ */
 function appendSampledCircle(group, radius, fill, stroke) {
   const circle = createSvgElement("circle");
   circle.setAttribute("cx", "0");
@@ -52,7 +76,12 @@ function appendSampledCircle(group, radius, fill, stroke) {
   group.appendChild(circle);
 }
 
+/**
+ * Adds the invisible selection target used by UI interaction styling.
+ */
 function appendSelectionRing(group, radius) {
+  // PopART expands selected vertex bounds with a halo; this ring gives the SVG
+  // UI a stable hook for equivalent selection feedback.
   const circle = createSvgElement("circle");
   circle.setAttribute("class", "selection-ring");
   circle.setAttribute("cx", "0");
@@ -63,11 +92,16 @@ function appendSelectionRing(group, radius) {
   group.appendChild(circle);
 }
 
+/**
+ * Appends trait pie slices for sampled vertices with trait counts.
+ */
 function appendPieSections(group, radius, traits, traitColors, defaultFill, stroke) {
   const total = traits.reduce((sum, entry) => sum + entry.value, 0);
   let startAngle = -Math.PI / 2;
 
   for (const entry of traits) {
+    // Trait slice areas are proportional to counts, matching PopART's pie
+    // sections for vertices with associated trait data.
     const angle = total > 0 ? (entry.value / total) * Math.PI * 2 : 0;
     const endAngle = startAngle + angle;
     const path = createSvgElement("path");
@@ -80,6 +114,9 @@ function appendPieSections(group, radius, traits, traitColors, defaultFill, stro
   }
 }
 
+/**
+ * Computes the point where a pie-slice arc meets the vertex circle.
+ */
 function pointOnCircle(radius, angle) {
   return {
     x: Math.cos(angle) * radius,
@@ -87,12 +124,17 @@ function pointOnCircle(radius, angle) {
   };
 }
 
+/**
+ * Builds the SVG path for one trait pie sector.
+ */
 function sectorPath(radius, startAngle, endAngle) {
   const start = pointOnCircle(radius, startAngle);
   const end = pointOnCircle(radius, endAngle);
   const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
 
   if (Math.abs(endAngle - startAngle) >= Math.PI * 2 - 1e-9) {
+    // SVG arcs cannot express a full circle in one segment, so split it into
+    // two half-arcs to preserve single-trait vertices.
     return [
       `M 0 0`,
       `L ${start.x} ${start.y}`,
@@ -110,6 +152,9 @@ function sectorPath(radius, startAngle, endAngle) {
   ].join(" ");
 }
 
+/**
+ * Appends the vertex label at its saved offset or below the node by default.
+ */
 function appendLabel(group, vertex, radius, fill, visualOptions) {
   const label = vertex.label ?? vertex.name ?? "";
   if (!label) {
@@ -121,6 +166,8 @@ function appendLabel(group, vertex, radius, fill, visualOptions) {
     x: 0,
     y: radius + fontSize + 4,
   };
+  // Labels carry the vertex index so the UI can drag labels independently
+  // while keeping the logical graph unchanged.
   const text = createSvgElement("text");
   text.textContent = label;
   text.setAttribute("x", String(offset.x));
@@ -134,6 +181,9 @@ function appendLabel(group, vertex, radius, fill, visualOptions) {
   group.appendChild(text);
 }
 
+/**
+ * Renders a sampled or inferred vertex as an SVG group.
+ */
 export function renderVertexItem(vertex, options = {}) {
   const baseRadius = numericValue(options.baseRadius, DEFAULT_BASE_RADIUS);
   const vertexOptions = options.vertices ?? {};
@@ -151,6 +201,8 @@ export function renderVertexItem(vertex, options = {}) {
   group.setAttribute("transform", `translate(${x}, ${y})`);
 
   if (vertex.info?.inferred === true) {
+    // Inferred vertices have no sample frequency, so they use a fixed small
+    // radius like PopART's intermediate/median-vector nodes.
     const radius = baseRadius * 0.4;
     appendSelectionRing(group, radius);
 
@@ -169,6 +221,8 @@ export function renderVertexItem(vertex, options = {}) {
   appendSelectionRing(group, radius);
 
   if (traits.length > 0) {
+    // Trait pies preserve the biological grouping on the rendered node instead
+    // of changing the graph topology.
     appendPieSections(group, radius, traits, traitColors, defaultFill, stroke);
   } else {
     appendSampledCircle(group, radius, defaultFill, stroke);

@@ -1,6 +1,12 @@
 import { renderEdgeItem } from "./EdgeItem.js";
 import { renderVertexItem, vertexRadius } from "./VertexItem.js";
 
+/**
+ * @fileoverview
+ * Renders a logical Graph into an SVG network scene.
+ * Receives graph data plus visual options and returns an SVG element.
+ */
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 const LEGEND_PADDING = 14;
 const LEGEND_GAP = 12;
@@ -40,16 +46,26 @@ const DEFAULT_OPTIONS = Object.freeze({
   traitNames: [],
 });
 
+/**
+ * Creates SVG elements in the correct namespace for browser rendering.
+ */
 function createSvgElement(name) {
   return document.createElementNS(SVG_NS, name);
 }
 
+/**
+ * Validates the minimal Graph surface required by the renderer.
+ */
 function assertGraphLike(graph) {
+  // The JS port renders Graph directly instead of reading through HapNet/model.
   if (!graph || !Array.isArray(graph.vertices) || !Array.isArray(graph.edges)) {
     throw new Error("NetworkRenderer error: expected a Graph instance.");
   }
 }
 
+/**
+ * Merges legacy UI option names into the current visual options shape.
+ */
 function normalizeOptions(options) {
   const edges = {
     ...DEFAULT_OPTIONS.edges,
@@ -60,6 +76,7 @@ function normalizeOptions(options) {
     ...(options.vertices ?? {}),
   };
 
+  // Keep older callers working while the UI migrates toward nested options.
   if (Array.isArray(options.traitColors)) {
     vertices.traitColors = options.traitColors;
   }
@@ -82,6 +99,9 @@ function normalizeOptions(options) {
   };
 }
 
+/**
+ * Appends reusable SVG text with caller-supplied attributes.
+ */
 function appendText(group, textContent, x, y, attributes = {}) {
   const text = createSvgElement("text");
   text.textContent = textContent;
@@ -96,20 +116,34 @@ function appendText(group, textContent, x, y, attributes = {}) {
   return text;
 }
 
+/**
+ * Estimates text width for legend layout where DOM measurement is unavailable.
+ */
 function approximateTextWidth(text, fontSize = 12) {
   return String(text).length * (fontSize * 0.58 || LEGEND_TEXT_WIDTH);
 }
 
+/**
+ * Converts visual metadata to a finite number with a fallback.
+ */
 function numericValue(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
+/**
+ * Reads the sampled frequency used by PopART-style node-size legend entries.
+ */
 function sampledVertexFrequency(vertex) {
   return Math.max(0, numericValue(vertex.info?.frequency ?? vertex.info?.freq ?? vertex.frequency, 1));
 }
 
+/**
+ * Finds the graph's radius-per-sqrt-frequency unit for a truthful size legend.
+ */
 function legendUnitRadius(graph, fallbackRadius) {
+  // Layout may have scaled real vertices already, so infer the displayed unit
+  // from sampled nodes instead of assuming the UI base radius.
   for (const vertex of graph.vertices) {
     if (vertex.info?.inferred === true || vertex.info?.sampled === false) {
       continue;
@@ -125,6 +159,9 @@ function legendUnitRadius(graph, fallbackRadius) {
   return fallbackRadius;
 }
 
+/**
+ * Computes legend geometry from trait labels and the current node-size scale.
+ */
 function legendDimensions(traitNames, baseRadius) {
   const largeRadius = baseRadius * Math.sqrt(10);
   const traitLabelWidth = traitNames.reduce(
@@ -158,6 +195,9 @@ function legendDimensions(traitNames, baseRadius) {
   };
 }
 
+/**
+ * Places a new legend beside the current graph bounds, like PopART's scene legend.
+ */
 function graphLegendPosition(graph, dimensions, baseRadius) {
   if (graph.vertices.length === 0) {
     return { x: 40, y: 40 };
@@ -176,12 +216,16 @@ function graphLegendPosition(graph, dimensions, baseRadius) {
     { maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY },
   );
 
+  // Default placement stays outside the network so it does not cover nodes.
   return {
     x: bounds.maxX + 40,
     y: bounds.maxY - dimensions.height,
   };
 }
 
+/**
+ * Accepts saved legend coordinates only when they can round-trip as numbers.
+ */
 function normalizeLegendPosition(position) {
   if (!position || !Number.isFinite(Number(position.x)) || !Number.isFinite(Number(position.y))) {
     return null;
@@ -193,6 +237,9 @@ function normalizeLegendPosition(position) {
   };
 }
 
+/**
+ * Renders the node-size and trait-color legend, or null when no traits exist.
+ */
 export function renderLegend(graph, visualOptions) {
   const traitNames = Array.isArray(visualOptions.traitNames) ? visualOptions.traitNames : [];
   if (traitNames.length === 0) {
@@ -214,6 +261,7 @@ export function renderLegend(graph, visualOptions) {
   group.setAttribute("id", "network-legend");
   group.setAttribute("transform", `translate(${position.x}, ${position.y})`);
 
+  // The legend is an SVG group so the UI can drag and persist it as one object.
   const background = createSvgElement("rect");
   background.setAttribute("class", "legend-bg");
   background.setAttribute("x", "0");
@@ -283,6 +331,7 @@ export function renderLegend(graph, visualOptions) {
   const traitLabelX = LEGEND_PADDING + LEGEND_TRAIT_RADIUS * 2 + LEGEND_GAP;
   let rowY = dimensions.traitsTitleY + LEGEND_TITLE_CONTENT_GAP + LEGEND_TRAIT_RADIUS;
   traitNames.forEach((traitName, index) => {
+    // Match PopART's legend idea: each trait gets the same color used in pies.
     const circle = createSvgElement("circle");
     circle.setAttribute("cx", String(traitX));
     circle.setAttribute("cy", String(rowY));
@@ -301,6 +350,9 @@ export function renderLegend(graph, visualOptions) {
   return group;
 }
 
+/**
+ * Renders the complete SVG network from a Graph without mutating it.
+ */
 export function renderNetwork(graph, options = {}) {
   assertGraphLike(graph);
 
@@ -310,6 +362,8 @@ export function renderNetwork(graph, options = {}) {
   const useResponsiveSize =
     normalizedOptions.width === DEFAULT_OPTIONS.width &&
     normalizedOptions.height === DEFAULT_OPTIONS.height;
+  // The application view should stretch to its container, while export paths
+  // can request fixed pixel dimensions.
   svg.setAttribute("width", useResponsiveSize ? "100%" : String(normalizedOptions.width));
   svg.setAttribute("height", useResponsiveSize ? "100%" : String(normalizedOptions.height));
   svg.setAttribute("viewBox", `0 0 ${normalizedOptions.width} ${normalizedOptions.height}`);
@@ -326,6 +380,7 @@ export function renderNetwork(graph, options = {}) {
   edgesGroup.setAttribute("class", "edges");
   viewportGroup.appendChild(edgesGroup);
 
+  // Edges are rendered before vertices so node circles cover edge endpoints.
   for (const edge of graph.edges) {
     edgesGroup.appendChild(renderEdgeItem(edge, normalizedOptions));
   }
@@ -340,6 +395,7 @@ export function renderNetwork(graph, options = {}) {
 
   const legend = renderLegend(graph, normalizedOptions);
   if (legend) {
+    // PopART keeps the legend with the scene, so pan/zoom affects it with the network.
     viewportGroup.appendChild(legend);
   }
 

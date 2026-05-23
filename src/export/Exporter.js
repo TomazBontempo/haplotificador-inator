@@ -1,5 +1,11 @@
 import { renderNetwork } from "../renderer/NetworkRenderer.js";
 
+/**
+ * @fileoverview
+ * Exports the full rendered network as SVG, PNG, or PDF.
+ * Export output fits the whole graph rather than the current viewport.
+ */
+
 const SVG_MIME_TYPE = "image/svg+xml";
 const PNG_MIME_TYPE = "image/png";
 const DEFAULT_EXPORT_OPTIONS = Object.freeze({
@@ -10,15 +16,24 @@ const DEFAULT_EXPORT_OPTIONS = Object.freeze({
   scale: "fit",
 });
 
+/**
+ * Converts loose export metadata to a finite number with a fallback.
+ */
 function numericValue(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
+/**
+ * Normalizes export dimensions to positive pixel values.
+ */
 function positiveDimension(value, fallback) {
   return Math.max(1, numericValue(value, fallback));
 }
 
+/**
+ * Merges caller options with publication-oriented export defaults.
+ */
 function normalizeExportOptions(exportOptions = {}) {
   return {
     ...DEFAULT_EXPORT_OPTIONS,
@@ -29,7 +44,12 @@ function normalizeExportOptions(exportOptions = {}) {
   };
 }
 
+/**
+ * Converts live visual options into export-time rendering options.
+ */
 function normalizeVisualOptions(visualOptions = {}, exportOptions) {
+  // Export ignores current zoom and pan; researchers need the full network,
+  // not the current viewport crop.
   return {
     ...visualOptions,
     width: exportOptions.width,
@@ -40,6 +60,9 @@ function normalizeVisualOptions(visualOptions = {}, exportOptions) {
   };
 }
 
+/**
+ * Reads a vertex position with numeric fallbacks for incomplete saved state.
+ */
 function vertexPosition(vertex) {
   return {
     x: numericValue(vertex.x, 0),
@@ -47,6 +70,9 @@ function vertexPosition(vertex) {
   };
 }
 
+/**
+ * Computes the coordinate bounds of the graph's vertices.
+ */
 function graphBounds(vertices) {
   if (vertices.length === 0) {
     return {
@@ -82,6 +108,9 @@ function graphBounds(vertices) {
   };
 }
 
+/**
+ * Computes the scale and padding needed to fit the full graph into the export.
+ */
 function fitScale(bounds, width, height) {
   const paddingX = width * 0.05;
   const paddingY = height * 0.05;
@@ -100,6 +129,9 @@ function fitScale(bounds, width, height) {
   };
 }
 
+/**
+ * Projects one vertex into export coordinates without changing the graph.
+ */
 function scaledPosition(vertex, bounds, sizing, width, height) {
   const position = vertexPosition(vertex);
   const x =
@@ -118,12 +150,16 @@ function scaledPosition(vertex, bounds, sizing, width, height) {
   return { x, y };
 }
 
+/**
+ * Builds a temporary graph projection sized for the export canvas.
+ */
 function scaledGraph(graph, width, height) {
   const bounds = graphBounds(graph.vertices);
   const sizing = fitScale(bounds, width, height);
   const vertexMap = new Map();
   const vertices = graph.vertices.map((vertex) => {
     const position = scaledPosition(vertex, bounds, sizing, width, height);
+    // Export uses cloned vertices so the live graph layout is never mutated.
     const clone = {
       ...vertex,
       x: position.x,
@@ -146,10 +182,16 @@ function scaledGraph(graph, width, height) {
   };
 }
 
+/**
+ * Reads the configured background color used by non-transparent exports.
+ */
 function backgroundColor(visualOptions) {
   return visualOptions.background?.color ?? "#ffffff";
 }
 
+/**
+ * Inserts or updates an SVG background rectangle for opaque SVG exports.
+ */
 function addSvgBackground(svg, fill) {
   const existing = svg.firstElementChild?.classList?.contains("svg-background")
     ? svg.firstElementChild
@@ -167,23 +209,37 @@ function addSvgBackground(svg, fill) {
   svg.insertBefore(rect, svg.firstChild);
 }
 
+/**
+ * Removes the synthetic SVG background for transparent exports.
+ */
 function removeSvgBackground(svg) {
   if (svg.firstElementChild?.classList?.contains("svg-background")) {
     svg.firstElementChild.remove();
   }
 }
 
+/**
+ * Serializes the SVG element into downloadable text.
+ */
 function serializeSvg(svg) {
   return new XMLSerializer().serializeToString(svg);
 }
 
+/**
+ * Encodes SVG text as an image source for canvas rasterization.
+ */
 function svgDataUrl(svgText) {
   return `data:${SVG_MIME_TYPE};charset=utf-8,${encodeURIComponent(svgText)}`;
 }
 
+/**
+ * Renders the full network into an export-sized SVG element.
+ */
 function renderExportSvg(graph, visualOptions, exportOptions) {
   const normalizedExportOptions = normalizeExportOptions(exportOptions);
   const normalizedVisualOptions = normalizeVisualOptions(visualOptions, normalizedExportOptions);
+  // scaledGraph creates a temporary projection so export sizing does not
+  // rewrite the graph coordinates used by the UI.
   const graphForExport = scaledGraph(
     graph,
     normalizedExportOptions.width,
@@ -200,6 +256,9 @@ function renderExportSvg(graph, visualOptions, exportOptions) {
   return { svg, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions };
 }
 
+/**
+ * Loads an SVG data URL as an image for canvas drawing.
+ */
 function imageFromDataUrl(dataUrl) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -209,6 +268,9 @@ function imageFromDataUrl(dataUrl) {
   });
 }
 
+/**
+ * Converts a canvas into a Blob while preserving asynchronous browser errors.
+ */
 function canvasToBlob(canvas, type) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -221,6 +283,9 @@ function canvasToBlob(canvas, type) {
   });
 }
 
+/**
+ * Rasterizes the export SVG into a canvas for PNG and PDF output.
+ */
 async function renderExportCanvas(graph, visualOptions, exportOptions) {
   const { svg, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions } =
     renderExportSvg(graph, visualOptions, exportOptions);
@@ -233,6 +298,8 @@ async function renderExportCanvas(graph, visualOptions, exportOptions) {
     throw new Error("Exporter error: 2D canvas context is unavailable.");
   }
 
+  // Canvas starts transparent; opaque exports need an explicit fill behind
+  // the rendered SVG image.
   if (!normalizedExportOptions.transparent) {
     context.fillStyle = backgroundColor(normalizedVisualOptions);
     context.fillRect(0, 0, normalizedExportOptions.width, normalizedExportOptions.height);
@@ -244,6 +311,9 @@ async function renderExportCanvas(graph, visualOptions, exportOptions) {
   return { canvas, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions };
 }
 
+/**
+ * Converts CSS-style hex colors into jsPDF RGB values.
+ */
 function hexToRgb(hexColor) {
   const value = String(hexColor).trim();
   const match = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value);
@@ -258,10 +328,16 @@ function hexToRgb(hexColor) {
   return [(number >> 16) & 255, (number >> 8) & 255, number & 255];
 }
 
+/**
+ * Ensures downloaded files have the requested extension exactly once.
+ */
 function filenameWithExtension(filename, extension) {
   return `${filename.replace(new RegExp(`\\.${extension}$`, "i"), "")}.${extension}`;
 }
 
+/**
+ * Starts a browser download when native file handles are unavailable.
+ */
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -274,17 +350,27 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Identifies user-cancelled native save picker operations.
+ */
 function isAbortError(error) {
   return error?.name === "AbortError";
 }
 
+/**
+ * Reads window lazily so export helpers remain testable outside a browser.
+ */
 function getWindow() {
   return globalThis.window ?? null;
 }
 
+/**
+ * Writes an export Blob through Save As, or downloads it as a fallback.
+ */
 async function writeBlobToPickedFile(blob, filename, typeOptions) {
   const currentWindow = getWindow();
   if (typeof currentWindow?.showSaveFilePicker !== "function") {
+    // Browsers without File System Access still need one-click export.
     triggerDownload(blob, filename);
     return;
   }
@@ -305,6 +391,9 @@ async function writeBlobToPickedFile(blob, filename, typeOptions) {
   }
 }
 
+/**
+ * Loads jsPDF only when PDF export is requested.
+ */
 async function loadJsPDF() {
   const { jsPDF } = await import("jspdf");
 
@@ -315,11 +404,15 @@ async function loadJsPDF() {
   return jsPDF;
 }
 
+/**
+ * Exports the full network as an SVG file.
+ */
 export async function exportSVG(graph, visualOptions, exportOptions) {
   const { svg, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions } =
     renderExportSvg(graph, visualOptions, exportOptions);
 
   if (!normalizedExportOptions.transparent) {
+    // SVG output needs its own background element because it has no canvas fill.
     addSvgBackground(svg, backgroundColor(normalizedVisualOptions));
   }
 
@@ -334,6 +427,9 @@ export async function exportSVG(graph, visualOptions, exportOptions) {
   );
 }
 
+/**
+ * Exports the full network as a PNG image.
+ */
 export async function exportPNG(graph, visualOptions, exportOptions) {
   const { canvas, exportOptions: normalizedExportOptions } = await renderExportCanvas(
     graph,
@@ -351,12 +447,16 @@ export async function exportPNG(graph, visualOptions, exportOptions) {
   );
 }
 
+/**
+ * Exports the full network as a PDF document.
+ */
 export async function exportPDF(graph, visualOptions, exportOptions) {
   try {
     const { canvas, visualOptions: normalizedVisualOptions, exportOptions: normalizedExportOptions } =
       await renderExportCanvas(graph, visualOptions, exportOptions);
     const jsPDF = await loadJsPDF();
     const pdf = new jsPDF({
+      // Match page orientation to the requested export dimensions.
       orientation:
         normalizedExportOptions.width > normalizedExportOptions.height ? "landscape" : "portrait",
       unit: "px",
@@ -364,6 +464,8 @@ export async function exportPDF(graph, visualOptions, exportOptions) {
     });
 
     if (!normalizedExportOptions.transparent) {
+      // PDF pages are opaque by default in many viewers; fill explicitly so the
+      // configured background matches PNG/SVG exports.
       pdf.setFillColor(...hexToRgb(backgroundColor(normalizedVisualOptions)));
       pdf.rect(0, 0, normalizedExportOptions.width, normalizedExportOptions.height, "F");
     }
@@ -380,6 +482,7 @@ export async function exportPDF(graph, visualOptions, exportOptions) {
     const filename = filenameWithExtension(normalizedExportOptions.filename, "pdf");
     const blob = pdf.output("blob");
     if (typeof getWindow()?.showSaveFilePicker !== "function" && typeof pdf.save === "function") {
+      // jsPDF's save path is a useful fallback in browsers without native file handles.
       pdf.save(filename);
     }
     await writeBlobToPickedFile(

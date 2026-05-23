@@ -1,7 +1,16 @@
+/**
+ * @fileoverview
+ * Runs network algorithms inside a Web Worker.
+ * Receives serialized HapNet JSON and posts back a serialized Graph.
+ */
+
 const DNA_AMBIGUOUS = new Set(["-", "?", "N", "Y", "R", "M", "S", "V", "W", "K", "D", "H", "B"]);
 const BINARY_AMBIGUOUS = new Set(["-", "?"]);
 const AA_AMBIGUOUS = new Set(["-", "X", "?"]);
 
+/**
+ * Mirrors HapNet ambiguity handling for worker-side distance checks.
+ */
 function isAmbiguousChar(char, datatype) {
   const value = String(char).toUpperCase();
   if (datatype === "binary") {
@@ -13,6 +22,9 @@ function isAmbiguousChar(char, datatype) {
   return DNA_AMBIGUOUS.has(value);
 }
 
+/**
+ * Preserves HapNet's special-case DNA ambiguity compatibility.
+ */
 function isCompatibleDnaAmbiguity(left, right) {
   return (
     (left === "R" && (right === "A" || right === "G")) ||
@@ -22,6 +34,9 @@ function isCompatibleDnaAmbiguity(left, right) {
   );
 }
 
+/**
+ * Rebuilds the minimal HapNet API required by algorithms.
+ */
 function reconstructHapNet(hapNetJSON) {
   if (!hapNetJSON || !Array.isArray(hapNetJSON.haplotypes)) {
     throw new Error("Expected serialized HapNet data.");
@@ -34,6 +49,8 @@ function reconstructHapNet(hapNetJSON) {
   const distances = hapNetJSON.distances ?? [];
   const siteWeights = hapNetJSON.siteWeights ?? [];
 
+  // HapNet cannot cross the worker boundary as a live instance; structured
+  // clone keeps only data, so algorithms receive this compatible read-only API.
   return {
     datatype,
     haplotypes,
@@ -79,6 +96,9 @@ function reconstructHapNet(hapNetJSON) {
         if (left === right) {
           continue;
         }
+
+        // Ambiguous sites are skipped to match HapNet distance semantics
+        // after the automatic masking step.
         if (isAmbiguousChar(left, datatype) || isAmbiguousChar(right, datatype)) {
           if (datatype === "dna" && isCompatibleDnaAmbiguity(left, right)) {
             continue;
@@ -94,6 +114,9 @@ function reconstructHapNet(hapNetJSON) {
   };
 }
 
+/**
+ * Converts the algorithm Graph into plain data for postMessage.
+ */
 function serializeGraph(graph) {
   return {
     vertices: graph.vertices.map((vertex) => ({
@@ -105,6 +128,8 @@ function serializeGraph(graph) {
       x: vertex.x,
       y: vertex.y,
       radius: vertex.radius,
+      // Edge identity is serialized by index so the UI can restore references
+      // without sharing object instances across threads.
       incidentEdges: vertex.incidentEdges.map((edge) => edge.index),
     })),
     edges: graph.edges.map((edge) => ({
@@ -119,6 +144,9 @@ function serializeGraph(graph) {
   };
 }
 
+/**
+ * Loads only the selected algorithm module for this worker request.
+ */
 async function loadAlgorithm(algorithm) {
   if (algorithm === "MSN") {
     const { computeMSN } = await import("../algorithms/MSN.js");
@@ -134,18 +162,22 @@ async function loadAlgorithm(algorithm) {
   }
   if (algorithm === "IntNJ") {
     const { computeIntNJ } = await import("../algorithms/IntNJ.js");
+    // IntNJ is async because its HiGHS WebAssembly solver initializes
+    // asynchronously inside the algorithm module.
     return (hapNet, params) => computeIntNJ(hapNet, params?.alpha ?? 0.5);
   }
   throw new Error(`Unknown algorithm "${algorithm}".`);
 }
 
-// Receives: { algorithm, hapNetJSON, params }
-// Posts back: { graph } on success
-// Posts back: { error: message } on failure
+/**
+ * Handles one algorithm request and reports either a serialized graph or error.
+ */
 self.onmessage = async (event) => {
   const { algorithm, hapNetJSON, params } = event.data;
   try {
     const compute = await loadAlgorithm(algorithm);
+    // Keep algorithm execution off the UI thread while preserving the
+    // read-only HapNet input contract used by the algorithm layer.
     const hapNet = reconstructHapNet(hapNetJSON);
     const graph = await compute(hapNet, params ?? {});
     self.postMessage({ graph: serializeGraph(graph) });
