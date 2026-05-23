@@ -12,10 +12,8 @@ const FILE_TYPES = Object.freeze([
   },
 ]);
 
-const FILE_SYSTEM_ACCESS_ERROR = "Save As is not supported in this browser. Use Chrome or Edge.";
+const FILE_SYSTEM_ACCESS_ERROR = "File System Access is not supported in this browser. Use Chrome or Edge.";
 
-// Known limitation: the File System Access picker workflow is not available in
-// Firefox, so callers should surface an export/open fallback in the UI layer.
 function fileSystemAccessError() {
   return new Error(FILE_SYSTEM_ACCESS_ERROR);
 }
@@ -105,9 +103,9 @@ function assertOpenPickerSupport() {
 }
 
 function suggestedNameFor(state) {
-  const originalFilename = String(state?.originalFilename || "project").trim();
-  const safeFilename = originalFilename.split(/[\\/]/).pop() || "project";
-  const basename = safeFilename.replace(/\.[^.]*$/, "") || "project";
+  const originalFilename = String(state?.originalFilename || "network").trim();
+  const safeFilename = originalFilename.split(/[\\/]/).pop() || "network";
+  const basename = safeFilename.replace(/\.[^.]*$/, "") || "network";
   return `${basename}.hapnet`;
 }
 
@@ -121,6 +119,23 @@ function filePickerOptions(state = null) {
 
 function serializeState(state) {
   return JSON.stringify(state, null, 2);
+}
+
+function downloadState(state) {
+  const currentWindow = getWindow();
+  const currentDocument = currentWindow?.document ?? globalThis.document;
+  const currentURL = currentWindow?.URL ?? globalThis.URL;
+
+  if (!currentDocument || !currentURL) {
+    throw fileSystemAccessError();
+  }
+
+  const blob = new Blob([serializeState(state)], { type: "application/json" });
+  const anchor = currentDocument.createElement("a");
+  anchor.href = currentURL.createObjectURL(blob);
+  anchor.download = suggestedNameFor(state);
+  anchor.click();
+  currentURL.revokeObjectURL(anchor.href);
 }
 
 /**
@@ -156,7 +171,10 @@ export async function hasAutoSave() {
  * Prompts the user for a .hapnet destination and writes the state as JSON.
  */
 export async function saveAs(state) {
-  assertSavePickerSupport();
+  if (typeof getWindow()?.showSaveFilePicker !== "function") {
+    downloadState(state);
+    return null;
+  }
 
   try {
     const fileHandle = await getWindow().showSaveFilePicker(filePickerOptions(state));

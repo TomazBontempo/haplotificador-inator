@@ -66,6 +66,7 @@ let labelDragElement = null;
 let progressDotsInterval = null;
 let progressDotIndex = 0;
 let panelAnimationTimers = new WeakMap();
+let temporaryStatusTimer = null;
 
 export function __setNetworkViewDependencies(overrides = {}) {
   dependencies = { ...dependencies, ...overrides };
@@ -694,6 +695,7 @@ export async function save() {
 
 export async function saveAsProject() {
   const storage = await getStorageModule();
+  const isFirefoxFallback = typeof window !== "undefined" && !window.showSaveFilePicker;
   const fileHandle = await storage.saveAs(buildSaveState());
 
   if (fileHandle) {
@@ -701,6 +703,8 @@ export async function saveAsProject() {
     await storage.autoSave(buildSaveState());
     markSaved();
     syncStatusBar();
+  } else if (isFirefoxFallback) {
+    showTemporaryStatus("Downloaded to your Downloads folder", 3000);
   }
 
   return fileHandle;
@@ -710,6 +714,23 @@ function markSaved(status = "Saved") {
   state.lastSaved = new Date();
   state.saveStatus = status;
   state.hasUnsavedChanges = false;
+}
+
+function showTemporaryStatus(message, duration = 3000) {
+  const statusSave = byId("status-save");
+  if (!statusSave) {
+    return;
+  }
+
+  if (temporaryStatusTimer) {
+    clearTimeout(temporaryStatusTimer);
+  }
+
+  statusSave.textContent = message;
+  temporaryStatusTimer = setTimeout(() => {
+    temporaryStatusTimer = null;
+    syncStatusBar();
+  }, duration);
 }
 
 function clampZoom(value) {
@@ -963,8 +984,13 @@ async function checkUnsavedChanges() {
       return "proceed";
     }
 
+    const isFirefoxFallback = typeof window !== "undefined" && !window.showSaveFilePicker;
     const handle = await storage.saveAs(buildSaveState());
     if (!handle) {
+      if (isFirefoxFallback) {
+        showTemporaryStatus("Downloaded to your Downloads folder", 3000);
+        return "proceed";
+      }
       return "cancel";
     }
 
