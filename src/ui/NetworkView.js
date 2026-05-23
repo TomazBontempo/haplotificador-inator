@@ -416,9 +416,10 @@ function appShell() {
             </div>
           </div>
           <div id="zoom-controls">
+            <!-- Pan mode first: leftmost control for touchpad users who need it most frequently. -->
+            <button id="pan-mode-btn" type="button" title="Pan mode (P)">✋</button>
             <button id="zoom-in" type="button">+</button>
             <button id="zoom-out" type="button">-</button>
-            <button id="pan-mode-btn" type="button" title="Pan mode (P)">✋</button>
             <button id="zoom-fit" type="button">⊡</button>
           </div>
         </main>
@@ -4091,6 +4092,10 @@ function wireViewportInteractions() {
   );
 
   viewport.addEventListener("mousedown", (event) => {
+    // Let clicks on zoom controls reach their buttons -- do not
+    // capture pointer for pan when the user is clicking UI controls.
+    if (event.target.closest("#zoom-controls")) return;
+
     if (event.button === 1) {
       event.preventDefault();
       beginPan(event, true);
@@ -4107,6 +4112,10 @@ function wireViewportInteractions() {
   });
 
   viewport.addEventListener("pointerdown", (event) => {
+    // Let clicks on zoom controls reach their buttons -- do not
+    // capture pointer for pan when the user is clicking UI controls.
+    if (event.target.closest("#zoom-controls")) return;
+
     if (!spacePanMode && !state.panModeActive) {
       return;
     }
