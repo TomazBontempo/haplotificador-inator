@@ -1231,6 +1231,13 @@ function createModuleWorker(relativePath) {
   });
 }
 
+function hasInjectedWorkerClass() {
+  return (
+    dependencies.WorkerClass &&
+    (typeof Worker === "undefined" || dependencies.WorkerClass !== Worker)
+  );
+}
+
 function terminateWorkers() {
   algorithmWorker?.terminate();
   layoutWorker?.terminate();
@@ -1784,7 +1791,12 @@ export async function runCurrentPipeline() {
     const hapNet = new dependencies.HapNet(parsed, masked > 0 ? { mask } : {});
     state.hapNet = hapNet;
 
-    algorithmWorker = createModuleWorker("../workers/algorithmWorker.js");
+    algorithmWorker = hasInjectedWorkerClass()
+      ? createModuleWorker("../workers/algorithmWorker.js")
+      : new Worker(
+          new URL("../workers/algorithmWorker.js", import.meta.url),
+          { type: "module" },
+        );
     setProgressStage(3, "Running " + state.algorithm);
     const algorithmGraphJSON = await workerResult(algorithmWorker, {
       algorithm: state.algorithm,
@@ -1795,7 +1807,12 @@ export async function runCurrentPipeline() {
     algorithmWorker = null;
 
     setProgressStage(4, "Computing layout");
-    layoutWorker = createModuleWorker("../workers/layoutWorker.js");
+    layoutWorker = hasInjectedWorkerClass()
+      ? createModuleWorker("../workers/layoutWorker.js")
+      : new Worker(
+          new URL("../workers/layoutWorker.js", import.meta.url),
+          { type: "module" },
+        );
     const layoutGraphJSON = await workerResult(layoutWorker, {
       graphJSON: algorithmGraphJSON,
       options: { width: 1000, height: 1000 },
