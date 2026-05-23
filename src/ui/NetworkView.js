@@ -1120,28 +1120,34 @@ function setZoom(value) {
   setZoomAtViewportPoint(value, point.x, point.y);
 }
 
-// Cursor coordinates relative to the container -- wheel zoom needs these to
-// anchor the zoom point correctly.
 function viewportPointFromClient(clientX, clientY) {
-  const rect = byId("svg-container")?.getBoundingClientRect();
-  if (!rect) {
+  const svg = byId("svg-container")?.querySelector("svg");
+  if (!svg) {
     return viewportCenterPoint();
   }
 
-  return {
-    x: clientX - rect.left,
-    y: clientY - rect.top,
-  };
+  // svg.getScreenCTM().inverse() converts client pixels to root SVG
+  // space -- the same space panX/panY live in. This automatically
+  // handles viewBox scaling, letterboxing, and preserveAspectRatio
+  // without any manual offset math.
+  return new DOMPoint(clientX, clientY).matrixTransform(
+    svg.getScreenCTM().inverse(),
+  );
 }
 
-// Fallback anchor keeps keyboard zoom usable before the SVG container has
-// been measured.
 function viewportCenterPoint() {
-  const rect = byId("svg-container")?.getBoundingClientRect();
-  return {
-    x: rect ? rect.width / 2 : state.visualOptions.width / 2,
-    y: rect ? rect.height / 2 : state.visualOptions.height / 2,
-  };
+  const svg = byId("svg-container")?.querySelector("svg");
+  if (!svg) {
+    return { x: 500, y: 500 };
+  }
+
+  const rect = svg.getBoundingClientRect();
+  // Center of the SVG element in root SVG space, consistent
+  // with viewportPointFromClient() for keyboard zoom anchor.
+  return new DOMPoint(
+    rect.left + rect.width / 2,
+    rect.top + rect.height / 2,
+  ).matrixTransform(svg.getScreenCTM().inverse());
 }
 
 /**
