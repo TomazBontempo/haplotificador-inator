@@ -38,10 +38,16 @@ body {
   height: 100%;
 }
 
+html {
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
 body {
   margin: 0;
   padding: 0;
   overscroll-behavior: none;
+  touch-action: none;
   background: var(--color-bg);
   color: var(--color-text-primary);
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
@@ -737,6 +743,8 @@ input[type="color"]:focus-visible {
   height: 100%;
   overflow: hidden;
   touch-action: none;
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
   border: 2px solid transparent;
   background: var(--color-canvas);
 }
