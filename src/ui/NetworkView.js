@@ -4014,7 +4014,8 @@ function wireViewportInteractions() {
       // Mouse wheel produces large deltaY (~100), touchpad produces small (~3-5).
       // Using a logarithmic scale keeps zoom feeling consistent on both.
       const delta = event.deltaY;
-      const zoomFactor = Math.pow(0.999, delta);
+      const normalized = delta * (event.deltaMode === 1 ? 20 : 1);
+      const zoomFactor = Math.pow(0.996, normalized);
       const point = viewportPointFromClient(event.clientX, event.clientY);
       setZoomAtViewportPoint(
         state.visualOptions.zoom * zoomFactor,
