@@ -1,6 +1,6 @@
 # 🤖 Haplotificador-inator™
 
-> Web port of [PopART](http://popart.otago.ac.nz) — Population Analysis with Reticulate Trees.  
+> Browser-based port of [PopART](http://popart.otago.ac.nz) — Population Analysis with Reticulate Trees.  
 > Because no mad scientist should lose time waiting for a desktop app to load.
 
 **Live app:** [haplotificador-inator.vercel.app](https://haplotificador-inator.vercel.app)
@@ -9,9 +9,10 @@
 
 ## About
 
-Haplotificador-inator is a browser-based port of PopART, a desktop application for
-haplotype network construction and population genetics analysis. It runs entirely
-client-side — no server, no installation, no data upload.
+Haplotificador-inator is a browser-based port of PopART's core functionality,
+implementing the four main haplotype network algorithms with interactive
+visualization and export capabilities. It runs entirely client-side — no server,
+no installation, no data upload.
 
 This project was developed as a TCC (Trabalho de Conclusão de Curso) in Computer
 Science at UVA (Universidade Veiga de Almeida), with the goal of making haplotype
@@ -62,36 +63,13 @@ equally mathematically valid network due to LP solver degeneracy between HiGHS
 
 ## How to Use
 
-### Opening a file
-- Click **File → Open** or drag a `.nex` or `.hapnet` file onto the canvas
-- Supported formats: `.nex` (Nexus biological data) and `.hapnet` (saved project)
+See [USAGE.md](USAGE.md) for the full usage guide.
 
-### Running an algorithm
-1. Open a `.nex` file
-2. Click **Algorithm** in the toolbar
-3. Select an algorithm and set parameters if needed
-4. Click **OK** — the network renders automatically
-
-### Editing the network
-- **Drag nodes** to reposition them
-- **Drag labels** to move them independently from their node
-- **Drag the legend** to reposition it on the canvas
-- **Ctrl+Z / Ctrl+Shift+Z** — undo and redo
-- **Space + drag** or **middle mouse drag** — pan the canvas
-- **Ctrl + scroll** — zoom in/out
-
-### Saving your work
-- **Ctrl+S** — save to browser storage (IndexedDB)
-- **Ctrl+Shift+S** — save as `.hapnet` file to your computer
-- Auto-save runs every 5 minutes in the background
-- On next visit, the app offers to restore the previous session
-
-### Exporting
-1. Click **Export** in the toolbar
-2. Choose format: PNG, SVG, or PDF
-3. Set dimensions (minimum 3000×3000 recommended for publication figures)
-4. Choose transparent background if needed
-5. The full network is always exported regardless of current zoom level
+### Quick Start
+1. Open a `.nex` file via **File → Open** or drag it onto the canvas
+2. Click **Algorithm**, select an algorithm and parameters, click **OK**
+3. Edit the network by dragging nodes and labels
+4. Export via the **Export** button
 
 ---
 
@@ -99,13 +77,10 @@ equally mathematically valid network due to LP solver degeneracy between HiGHS
 
 | Browser | Support |
 |---------|---------|
-| Chrome | ✅ Full support |
+| Chrome | ✅ Full support — recommended |
 | Edge | ✅ Full support |
 | Firefox | ⚠️ Save As downloads to Downloads folder (no persistent file handle) |
 | Safari | ⚠️ Not tested |
-
-Auto-save to IndexedDB works in all browsers. Persistent Save As requires
-Chrome or Edge.
 
 ---
 
@@ -168,26 +143,40 @@ saves to IndexedDB only.
 
 ## Credits and Attribution
 
-This project is a web port of **PopART (Population Analysis with Reticulate Trees)**,
+This project is a browser-based port of **PopART (Population Analysis with Reticulate Trees)**,
 developed by Jessica Leigh and colleagues at the University of Otago, New Zealand,
 as part of the Allan Wilson Centre Imaging Evolution Initiative.
 
-**Please cite PopART when using this tool in publications:**
+**Please cite both this tool and the original PopART software:**
 
+**This tool:**
+> Bontempo, T. (2025). Haplotificador-inator: A browser-based web port of
+> PopART for haplotype network construction. Trabalho de Conclusão de Curso,
+> Universidade Veiga de Almeida (UVA), Rio de Janeiro, Brazil.
+> https://haplotificador-inator.vercel.app
+
+**The original PopART software:**
 > Leigh, J.W. & Bryant, D. (2015). PopART: Full-feature software for haplotype
 > network construction. *Methods in Ecology and Evolution*, 6(9), 1110–1116.
 > https://doi.org/10.1111/2041-210X.12410
 
+**Algorithm-specific citations:**
+
+If you used MSN or MJN:
+> Bandelt, H.J., Forster, P. & Röhl, A. (1999). Median-joining networks for
+> inferring intraspecific phylogenies. *Molecular Biology and Evolution*, 16(1), 37–48.
+> https://doi.org/10.1093/oxfordjournals.molbev.a026036
+
+If you used TCS:
+> Clement, M., Posada, D. & Crandall, K.A. (2000). TCS: a computer program to
+> estimate gene genealogies. *Molecular Ecology*, 9(10), 1657–1659.
+> https://doi.org/10.1046/j.1365-294x.2000.01020.x
+
+If you used IntNJ:
+> Leigh, J.W. & Bryant, D. (2015) — same as PopART citation above.
+
 **PopART source code:** https://github.com/jessicawleigh/popart-current  
 **PopART license:** Lesser GNU Public License (LGPL)
-
-**Additional algorithm references:**
-- Bandelt, H.J., Forster, P. & Röhl, A. (1999). Median-joining networks for
-  inferring intraspecific phylogenies. *Molecular Biology and Evolution*, 16(1), 37–48.
-- Clement, M., Posada, D. & Crandall, K.A. (2000). TCS: a computer program to
-  estimate gene genealogies. *Molecular Ecology*, 9(10), 1657–1659.
-- Tunkelang, D. (1999). A Numerical Optimization Approach to General Graph Drawing.
-  PhD thesis, Carnegie Mellon University.
 
 ---
 
