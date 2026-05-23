@@ -4014,23 +4014,13 @@ function wireViewportInteractions() {
       // Mouse wheel produces large deltaY (~100), touchpad produces small (~3-5).
       // Using a logarithmic scale keeps zoom feeling consistent on both.
       const delta = event.deltaY;
-      const zoomFactor = Math.pow(0.997, delta);
-      const svgPoint = getViewportPoint(event);
-      const newZoom = clampZoom(state.visualOptions.zoom * zoomFactor);
-      const rect = document
-        .getElementById("svg-container")
-        ?.getBoundingClientRect();
-      if (!rect) {
-        return;
-      }
-
-      const cursorX = event.clientX - rect.left;
-      const cursorY = event.clientY - rect.top;
-      state.visualOptions.zoom = newZoom;
-      state.visualOptions.panX = cursorX - svgPoint.x * newZoom;
-      state.visualOptions.panY = cursorY - svgPoint.y * newZoom;
-      applyViewportTransform();
-      markVisualChange();
+      const zoomFactor = Math.pow(0.999, delta);
+      const point = viewportPointFromClient(event.clientX, event.clientY);
+      setZoomAtViewportPoint(
+        state.visualOptions.zoom * zoomFactor,
+        point.x,
+        point.y,
+      );
     },
     { passive: false },
   );
@@ -4112,7 +4102,6 @@ function wireViewportInteractions() {
         return;
       }
 
-      event.preventDefault();
       const currentX =
         (event.touches[0].clientX + event.touches[1].clientX) / 2;
       const currentY =
@@ -4127,6 +4116,7 @@ function wireViewportInteractions() {
       lastTouchX = currentX;
       lastTouchY = currentY;
       applyViewportTransform();
+      event.preventDefault();
     },
     { passive: false },
   );
