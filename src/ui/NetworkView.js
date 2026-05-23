@@ -230,6 +230,8 @@ function appShell() {
             <hr>
             <button id="save" type="button">Save&nbsp;&nbsp;Ctrl+S</button>
             <button id="save-as" type="button">Save As&nbsp;&nbsp;Ctrl+Shift+S</button>
+            <hr>
+            <button id="help-file-menu">Help</button>
           </div>
         </div>
         <button id="algorithm-menu-btn" type="button">Algorithm</button>
@@ -245,6 +247,7 @@ function appShell() {
           <button id="toggle-legend" class="toggle-btn active" title="Show/hide legend">
             👁 Legend
           </button>
+          <button id="help-btn" class="toolbar-right-btn" title="Help">?</button>
         </div>
         <input id="open-file-input" class="hidden" type="file" accept=".nex,.hapnet">
         <div id="algorithm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="algorithm-title">
@@ -313,6 +316,26 @@ function appShell() {
                 <button id="unsaved-discard">Discard</button>
                 <button id="unsaved-cancel">Cancel</button>
               </div>
+            </div>
+          </div>
+        </div>
+        <div id="help-modal" class="hidden">
+          <div class="modal-overlay">
+            <div class="modal-dialog help-dialog">
+              <div class="help-header">
+                <h3>Haplotificador-inator — Help</h3>
+                <button id="help-close">✕</button>
+              </div>
+              <div class="help-tabs">
+                <button class="help-tab active" data-tab="quickstart">Quick Start</button>
+                <button class="help-tab" data-tab="algorithms">Algorithms</button>
+                <button class="help-tab" data-tab="editing">Editing</button>
+                <button class="help-tab" data-tab="saving">Saving</button>
+                <button class="help-tab" data-tab="exporting">Exporting</button>
+                <button class="help-tab" data-tab="shortcuts">Shortcuts</button>
+                <button class="help-tab" data-tab="citing">Citing</button>
+              </div>
+              <div class="help-content" id="help-content"></div>
             </div>
           </div>
         </div>
@@ -388,6 +411,155 @@ function ensureAppShell() {
 function byId(id) {
   return document.getElementById(id);
 }
+
+function buildHelpContent() {
+  const helpContent = {
+    quickstart: `
+      <h4>Opening a file</h4>
+      <p>Click <strong>File → Open</strong> or drag a .nex or .hapnet
+      file directly onto the canvas.</p>
+      <h4>Running an algorithm</h4>
+      <ol>
+        <li>Open a .nex file</li>
+        <li>Click <strong>Algorithm</strong> in the toolbar</li>
+        <li>Select an algorithm and set parameters</li>
+        <li>Click <strong>OK</strong></li>
+      </ol>
+      <h4>Editing</h4>
+      <p>Drag nodes and labels to reposition them.
+      Use the <strong>Visuals</strong> panel on the right to customize colors.</p>
+      <h4>Exporting</h4>
+      <p>Click <strong>Export</strong>, choose PNG/SVG/PDF,
+      set dimensions, and save.</p>
+    `,
+    algorithms: `
+      <table class="help-table">
+        <tr><th>Algorithm</th><th>Best for</th><th>Parameters</th></tr>
+        <tr><td><strong>MSN</strong></td><td>Simple datasets, quick overview</td><td>Epsilon (ε) default 0</td></tr>
+        <tr><td><strong>MJN</strong></td><td>Most datasets, standard choice</td><td>Epsilon (ε) default 0</td></tr>
+        <tr><td><strong>TCS</strong></td><td>Statistical parsimony required</td><td>None</td></tr>
+        <tr><td><strong>IntNJ</strong></td><td>Reticulate evolution, complex datasets</td><td>Alpha (α) default 0.5</td></tr>
+      </table>
+      <p><strong>When in doubt, use MJN.</strong> It is the most widely used
+      algorithm for haplotype network construction.</p>
+      <h4>Epsilon (ε) — MSN and MJN</h4>
+      <p>ε = 0: only minimum spanning connections (recommended).<br>
+      ε > 0: includes connections within ε extra mutations of the minimum.</p>
+      <h4>Alpha (α) — IntNJ</h4>
+      <p>α = 0.5: default, balances tree-like and reticulate structure.<br>
+      Higher α: more reticulations. Lower α: more tree-like.</p>
+    `,
+    editing: `
+      <h4>Moving nodes</h4>
+      <p>Click and drag any node. To move multiple nodes,
+      select them first (Shift+click or rubber band), then drag.</p>
+      <h4>Moving labels</h4>
+      <p>Click and drag any haplotype label independently from its node.
+      The label maintains its offset when the node moves.</p>
+      <h4>Moving the legend</h4>
+      <p>Click and drag the legend anywhere on the canvas.</p>
+      <h4>Navigation</h4>
+      <table class="help-table">
+        <tr><td>Pan</td><td>Space + drag or middle mouse drag</td></tr>
+        <tr><td>Zoom</td><td>Ctrl + scroll wheel</td></tr>
+        <tr><td>Fit to screen</td><td>Ctrl+0 or ⊡ button</td></tr>
+        <tr><td>Select multiple</td><td>Shift+click or rubber band drag</td></tr>
+        <tr><td>Deselect</td><td>Click empty area or Escape</td></tr>
+      </table>
+      <h4>Undo / Redo</h4>
+      <p>Ctrl+Z to undo. Ctrl+Shift+Z or Ctrl+Y to redo. 20 steps per session.</p>
+    `,
+    saving: `
+      <h4>Auto-save</h4>
+      <p>The app saves to browser storage automatically every 5 minutes.
+      Your work is recovered on the next visit if the browser closes unexpectedly.</p>
+      <h4>Manual save — Ctrl+S</h4>
+      <p>Saves to browser storage (or to your .hapnet file if Save As was used).</p>
+      <h4>Save As — Ctrl+Shift+S</h4>
+      <p>Saves a .hapnet project file to your computer. The .hapnet file contains
+      network topology, node positions, label positions, colors, and visual settings.</p>
+      <h4>Sharing with colleagues</h4>
+      <p>Send a .hapnet file to a colleague. They can open it and see the network
+      exactly as you left it — same positions, colors, and layout.</p>
+      <h4>Session restore</h4>
+      <p>When you open the app and a previous session exists, a dialog offers
+      to restore it or start fresh.</p>
+    `,
+    exporting: `
+      <h4>Export formats</h4>
+      <table class="help-table">
+        <tr><td><strong>SVG</strong></td><td>Vector format, infinitely scalable. Best for Illustrator or Inkscape.</td></tr>
+        <tr><td><strong>PNG</strong></td><td>Raster format. Best for presentations and documents.</td></tr>
+        <tr><td><strong>PDF</strong></td><td>Best for direct inclusion in manuscripts.</td></tr>
+      </table>
+      <h4>Resolution</h4>
+      <p>Minimum <strong>3000×3000</strong> recommended for publication figures.
+      Higher resolution = sharper print quality.</p>
+      <h4>Transparent background</h4>
+      <p>Check "Transparent background" to export without a background,
+      useful for placing the figure over colored backgrounds in documents.</p>
+      <p>The full network is always exported regardless of current zoom or pan level.</p>
+    `,
+    shortcuts: `
+      <table class="help-table">
+        <tr><th>Shortcut</th><th>Action</th></tr>
+        <tr><td>Ctrl+S</td><td>Save</td></tr>
+        <tr><td>Ctrl+Shift+S</td><td>Save As</td></tr>
+        <tr><td>Ctrl+Z</td><td>Undo</td></tr>
+        <tr><td>Ctrl+Shift+Z / Ctrl+Y</td><td>Redo</td></tr>
+        <tr><td>Ctrl+0</td><td>Fit network to screen</td></tr>
+        <tr><td>Ctrl++</td><td>Zoom in</td></tr>
+        <tr><td>Ctrl+-</td><td>Zoom out</td></tr>
+        <tr><td>Space + drag</td><td>Pan canvas</td></tr>
+        <tr><td>Escape</td><td>Deselect all / close menus</td></tr>
+      </table>
+    `,
+    citing: `
+      <h4>Please cite both this tool and PopART:</h4>
+      <div class="help-citation">
+        <strong>This tool:</strong><br>
+        Bontempo, T. (2025). Haplotificador-inator: A browser-based web port of
+        PopART for haplotype network construction. TCC, UVA, Rio de Janeiro, Brazil.
+        <a href="https://haplotificador-inator.vercel.app" target="_blank">
+          haplotificador-inator.vercel.app
+        </a>
+      </div>
+      <div class="help-citation">
+        <strong>PopART:</strong><br>
+        Leigh, J.W. & Bryant, D. (2015). PopART: Full-feature software for
+        haplotype network construction. Methods in Ecology and Evolution, 6(9), 1110–1116.
+        <a href="https://doi.org/10.1111/2041-210X.12410" target="_blank">
+          doi:10.1111/2041-210X.12410
+        </a>
+      </div>
+      <h4>Algorithm-specific citations:</h4>
+      <div class="help-citation">
+        <strong>MSN / MJN:</strong><br>
+        Bandelt, H.J., Forster, P. & Röhl, A. (1999). Median-joining networks
+        for inferring intraspecific phylogenies. Molecular Biology and Evolution, 16(1), 37–48.
+        <a href="https://doi.org/10.1093/oxfordjournals.molbev.a026036" target="_blank">
+          doi:10.1093/oxfordjournals.molbev.a026036
+        </a>
+      </div>
+      <div class="help-citation">
+        <strong>TCS:</strong><br>
+        Clement, M., Posada, D. & Crandall, K.A. (2000). TCS: a computer program
+        to estimate gene genealogies. Molecular Ecology, 9(10), 1657–1659.
+        <a href="https://doi.org/10.1046/j.1365-294x.2000.01020.x" target="_blank">
+          doi:10.1046/j.1365-294x.2000.01020.x
+        </a>
+      </div>
+      <div class="help-citation">
+        <strong>IntNJ:</strong><br>
+        Leigh, J.W. & Bryant, D. (2015) — same as PopART citation above.
+      </div>
+    `,
+  };
+
+  return helpContent;
+}
+
+const helpContent = buildHelpContent();
 
 function blurClickedControl(event) {
   event.currentTarget?.blur?.();
@@ -667,6 +839,7 @@ function closeMenusAndModals() {
   setHidden(byId("algorithm-modal"), true);
   setHidden(byId("export-modal"), true);
   setHidden(byId("restore-modal"), true);
+  setHidden(byId("help-modal"), true);
 }
 
 function closeFileMenu() {
@@ -678,6 +851,28 @@ function toggleFileMenu() {
   if (fileMenu) {
     fileMenu.classList.toggle("hidden");
   }
+}
+
+function setActiveHelpTab(tab) {
+  const activeTab = helpContent[tab] ? tab : "quickstart";
+  document.querySelectorAll(".help-tab").forEach((button) => {
+    button.classList.toggle("active", button.dataset.tab === activeTab);
+  });
+
+  const content = byId("help-content");
+  if (content) {
+    content.innerHTML = helpContent[activeTab];
+  }
+}
+
+function openHelpModal() {
+  closeFileMenu();
+  setActiveHelpTab("quickstart");
+  setHidden(byId("help-modal"), false);
+}
+
+function closeHelpModal() {
+  setHidden(byId("help-modal"), true);
 }
 
 export async function save() {
@@ -2777,6 +2972,14 @@ function wireToolbar() {
     openExportModal();
     blurClickedControl(event);
   });
+  byId("help-btn")?.addEventListener("click", (event) => {
+    openHelpModal();
+    blurClickedControl(event);
+  });
+  byId("help-file-menu")?.addEventListener("click", (event) => {
+    openHelpModal();
+    blurClickedControl(event);
+  });
   byId("undo-btn")?.addEventListener("click", (event) => {
     undo();
     blurClickedControl(event);
@@ -2933,6 +3136,27 @@ function wireModals() {
   byId("export-cancel")?.addEventListener("click", (event) => {
     setHidden(byId("export-modal"), true);
     blurClickedControl(event);
+  });
+
+  byId("help-close")?.addEventListener("click", (event) => {
+    closeHelpModal();
+    blurClickedControl(event);
+  });
+
+  byId("help-modal")
+    ?.querySelector(".modal-overlay")
+    ?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) {
+        closeHelpModal();
+      }
+    });
+
+  document.querySelectorAll(".help-tab").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const tab = event.currentTarget?.dataset?.tab ?? "quickstart";
+      setActiveHelpTab(tab);
+      blurClickedControl(event);
+    });
   });
 }
 

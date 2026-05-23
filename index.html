@@ -19,6 +19,8 @@
           <hr>
           <button id="save" type="button">Save&nbsp;&nbsp;Ctrl+S</button>
           <button id="save-as" type="button">Save As&nbsp;&nbsp;Ctrl+Shift+S</button>
+          <hr>
+          <button id="help-file-menu">Help</button>
         </div>
       </div>
       <button id="algorithm-menu-btn" type="button">Algorithm</button>
@@ -34,6 +36,7 @@
         <button id="toggle-legend" class="toggle-btn active" title="Show/hide legend">
           👁 Legend
         </button>
+        <button id="help-btn" class="toolbar-right-btn" title="Help">?</button>
       </div>
       <input id="open-file-input" class="hidden" type="file" accept=".nex,.hapnet">
       <div id="algorithm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="algorithm-title">
@@ -102,6 +105,26 @@
               <button id="unsaved-discard">Discard</button>
               <button id="unsaved-cancel">Cancel</button>
             </div>
+          </div>
+        </div>
+      </div>
+      <div id="help-modal" class="hidden">
+        <div class="modal-overlay">
+          <div class="modal-dialog help-dialog">
+            <div class="help-header">
+              <h3>Haplotificador-inator — Help</h3>
+              <button id="help-close">✕</button>
+            </div>
+            <div class="help-tabs">
+              <button class="help-tab active" data-tab="quickstart">Quick Start</button>
+              <button class="help-tab" data-tab="algorithms">Algorithms</button>
+              <button class="help-tab" data-tab="editing">Editing</button>
+              <button class="help-tab" data-tab="saving">Saving</button>
+              <button class="help-tab" data-tab="exporting">Exporting</button>
+              <button class="help-tab" data-tab="shortcuts">Shortcuts</button>
+              <button class="help-tab" data-tab="citing">Citing</button>
+            </div>
+            <div class="help-content" id="help-content"></div>
           </div>
         </div>
       </div>
