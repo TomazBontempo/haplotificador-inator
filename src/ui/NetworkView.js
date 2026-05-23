@@ -140,6 +140,7 @@ function createInitialState() {
     dataPanelCollapsed: false,
     propsPanelCollapsed: false,
     selectedElements: [],
+    panModeActive: false,
     maskedSites: 0,
     maskedSiteIndices: [],
     saveHandle: null,
@@ -288,6 +289,7 @@ function appShell() {
         <button id="undo-btn" type="button" title="Undo (Ctrl+Z)" disabled>↩</button>
         <button id="redo-btn" type="button" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
         <div id="toolbar-right">
+          <button id="pan-mode-btn" class="toolbar-right-btn" title="Pan mode (P)">✋</button>
           <button id="toggle-labels" class="toggle-btn active" title="Show/hide node labels">
             👁 Labels
           </button>
@@ -522,6 +524,20 @@ function buildHelpContent() {
         <tr><td>Select multiple</td><td>Shift+click or rubber band drag</td></tr>
         <tr><td>Deselect</td><td>Click empty area or Escape</td></tr>
       </table>
+      <h4>Touchpad Navigation on Windows</h4>
+      <p>If two-finger horizontal swipe navigates back/forward in your browser
+      instead of panning the network, use one of these solutions:</p>
+      <p><strong>Option 1 — Use the pan mode button:</strong><br>
+      Click the ✋ button in the toolbar (or press P) to activate pan mode.
+      Click and drag anywhere on the canvas to pan.</p>
+      <p><strong>Option 2 — Disable swipe navigation in your browser:</strong><br>
+      Firefox: type about:config in the address bar, search for
+      browser.gesture.swipe.left and reset it, then search for
+      browser.gesture.swipe.right and reset it.<br>
+      Microsoft Edge: go to Settings → Accessibility, find "Swipe between pages",
+      and turn it Off.</p>
+      <p><strong>Option 3 — Use Space + drag:</strong><br>
+      Hold the Space bar and drag with the left mouse button to pan.</p>
       <h4>Undo / Redo</h4>
       <p>Ctrl+Z to undo. Ctrl+Shift+Z or Ctrl+Y to redo. 20 steps per session.</p>
     `,
@@ -1857,6 +1873,23 @@ function syncToggleButton(button, active, disabled = false) {
 }
 
 /**
+ * Applies the persistent pan mode state to the viewport and toolbar button.
+ */
+function syncPanModeState() {
+  const active = state.panModeActive === true;
+  byId("viewport")?.classList.toggle("pan-mode", active);
+  syncToggleButton(byId("pan-mode-btn"), active);
+}
+
+/**
+ * Toggles click-and-drag viewport panning without requiring Space.
+ */
+function togglePanMode() {
+  state.panModeActive = !state.panModeActive;
+  syncPanModeState();
+}
+
+/**
  * Applies label and legend visibility to the current SVG.
  */
 function applyVisualVisibilityState(svg = currentSvg()) {
@@ -3019,6 +3052,9 @@ function handleLabelMousedown(event) {
   if (event.button !== 0) {
     return;
   }
+  if (state.panModeActive) {
+    return;
+  }
 
   const labelElement = labelElementFromEvent(event);
   if (labelElement) {
@@ -3282,7 +3318,7 @@ function wireSvgInteractions(svg) {
       return;
     }
 
-    if (spacePanMode) {
+    if (spacePanMode || state.panModeActive) {
       return;
     }
 
@@ -3319,7 +3355,7 @@ function wireSvgInteractions(svg) {
       return;
     }
 
-    if (!edgeElement && !spacePanMode) {
+    if (!edgeElement && !spacePanMode && !state.panModeActive) {
       event.preventDefault();
       beginRubberBand(event);
     }
@@ -3346,6 +3382,9 @@ function wireLegendInteractions(svg) {
 
   legend.addEventListener("mousedown", (event) => {
     if (event.button === 0) {
+      if (state.panModeActive) {
+        return;
+      }
       beginLegendDrag(event);
     }
   });
@@ -3551,6 +3590,10 @@ function wireToolbar() {
   });
   byId("redo-btn")?.addEventListener("click", (event) => {
     redo();
+    blurClickedControl(event);
+  });
+  byId("pan-mode-btn")?.addEventListener("click", (event) => {
+    togglePanMode();
     blurClickedControl(event);
   });
   byId("toggle-labels")?.addEventListener("click", toggleLabels);
@@ -4026,12 +4069,32 @@ function wireViewportInteractions() {
     { passive: false },
   );
 
+  viewport.addEventListener(
+    "wheel",
+    (event) => {
+      if (event.ctrlKey) {
+        return;
+      }
+
+      const isHorizontalIntent = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      const isVerticalIntent = Math.abs(event.deltaY) > Math.abs(event.deltaX);
+
+      if (isHorizontalIntent || isVerticalIntent) {
+        event.preventDefault();
+        state.visualOptions.panX -= event.deltaX;
+        state.visualOptions.panY -= event.deltaY;
+        applyViewportTransform();
+      }
+    },
+    { passive: false },
+  );
+
   viewport.addEventListener("mousedown", (event) => {
     if (event.button === 1) {
       event.preventDefault();
       beginPan(event, true);
     } else if (
-      spacePanMode &&
+      (spacePanMode || state.panModeActive) &&
       event.button === 0 &&
       typeof window.PointerEvent === "undefined"
     ) {
@@ -4041,7 +4104,7 @@ function wireViewportInteractions() {
   });
 
   viewport.addEventListener("pointerdown", (event) => {
-    if (!spacePanMode) {
+    if (!spacePanMode && !state.panModeActive) {
       return;
     }
     if (event.pointerType === "touch") {
@@ -4265,6 +4328,15 @@ function wireKeyboardShortcuts() {
       return;
     }
 
+    if (event.key === "p" || event.key === "P") {
+      if (document.activeElement?.tagName === "INPUT") {
+        return;
+      }
+      event.preventDefault();
+      togglePanMode();
+      return;
+    }
+
     if (!event.ctrlKey) {
       return;
     }
@@ -4319,12 +4391,14 @@ export function initNetworkView() {
   if (app?.dataset.networkViewInitialized === "true") {
     syncVisualsPanel();
     renderAlgorithmParams();
+    syncPanModeState();
     return state;
   }
 
   renderVisualsPanel();
   syncVisualsPanel();
   renderAlgorithmParams();
+  syncPanModeState();
 
   wireFileInputs();
   wireToolbar();

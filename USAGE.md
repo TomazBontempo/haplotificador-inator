@@ -282,6 +282,31 @@ whether to save, discard, or cancel.
 
 ---
 
+## Touchpad Navigation on Windows
+
+If two-finger horizontal swipe navigates back/forward in your browser
+instead of panning the network, use one of these solutions:
+
+**Option 1 — Use the pan mode button:**
+Click the ✋ button in the toolbar (or press P) to activate pan mode.
+Click and drag anywhere on the canvas to pan.
+
+**Option 2 — Disable swipe navigation in your browser:**
+
+Firefox:
+1. Type `about:config` in the address bar
+2. Search for `browser.gesture.swipe.left` and reset it
+3. Search for `browser.gesture.swipe.right` and reset it
+
+Microsoft Edge:
+1. Go to Settings → Accessibility
+2. Find "Swipe between pages" and turn it Off
+
+**Option 3 — Use Space + drag:**
+Hold the Space bar and drag with the left mouse button to pan.
+
+---
+
 ## Citing This Tool
 
 If you use Haplotificador-inator in a publication, please cite both:
