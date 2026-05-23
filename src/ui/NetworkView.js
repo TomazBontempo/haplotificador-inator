@@ -1120,31 +1120,27 @@ function setZoom(value) {
   setZoomAtViewportPoint(value, point.x, point.y);
 }
 
+// Cursor coordinates relative to the container -- wheel zoom needs these to
+// anchor the zoom point correctly.
 function viewportPointFromClient(clientX, clientY) {
   const rect = byId("svg-container")?.getBoundingClientRect();
-  const width = state.visualOptions.width || 1000;
-  const height = state.visualOptions.height || 1000;
-  if (!rect || rect.width === 0 || rect.height === 0) {
+  if (!rect) {
     return viewportCenterPoint();
   }
 
-  // Convert screen pixels to SVG user units -- panX/panY live in
-  // SVG translate space, so cursor coordinates must match that space
-  // for the zoom-toward-cursor formula to work correctly.
-  const scaleX = rect.width / width;
-  const scaleY = rect.height / height;
   return {
-    x: (clientX - rect.left) / scaleX,
-    y: (clientY - rect.top) / scaleY,
+    x: clientX - rect.left,
+    y: clientY - rect.top,
   };
 }
 
 // Fallback anchor keeps keyboard zoom usable before the SVG container has
 // been measured.
 function viewportCenterPoint() {
+  const rect = byId("svg-container")?.getBoundingClientRect();
   return {
-    x: (state.visualOptions.width || 1000) / 2,
-    y: (state.visualOptions.height || 1000) / 2,
+    x: rect ? rect.width / 2 : state.visualOptions.width / 2,
+    y: rect ? rect.height / 2 : state.visualOptions.height / 2,
   };
 }
 
