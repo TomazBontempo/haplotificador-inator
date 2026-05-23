@@ -1,13 +1,13 @@
 :root {
   /* Base */
-  --color-chrome: #242424;        /* toolbar, status bar */
-  --color-bg: #1a1a1a;            /* app background */
-  --color-panel: #2d2d2d;         /* side panels base */
-  --color-canvas: #e8e8e8;        /* network viewport - always light */
+  --color-chrome: #242424; /* toolbar, status bar */
+  --color-bg: #1a1a1a; /* app background */
+  --color-panel: #2d2d2d; /* side panels base */
+  --color-canvas: #e8e8e8; /* network viewport - always light */
 
   /* Accents */
-  --color-yellow: #f5a623;        /* primary accent - actions, highlights */
-  --color-purple: #8b5cf6;        /* secondary accent - state, selection, sliders */
+  --color-yellow: #f5a623; /* primary accent - actions, highlights */
+  --color-purple: #8b5cf6; /* secondary accent - state, selection, sliders */
 
   /* Text */
   --color-text-primary: #ffffff;
@@ -43,7 +43,7 @@ body {
   padding: 0;
   background: var(--color-bg);
   color: var(--color-text-primary);
-  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
 }
 
 button,
@@ -83,7 +83,10 @@ textarea {
   color: var(--color-text-primary);
   font-size: 13px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
 }
 
 #toolbar button:hover,
@@ -112,7 +115,9 @@ textarea {
   padding: 0 10px;
   color: var(--color-text-secondary);
   font-size: 16px;
-  transition: color 0.15s, opacity 0.15s;
+  transition:
+    color 0.15s,
+    opacity 0.15s;
 }
 
 #undo-btn:not(:disabled):hover,
@@ -146,7 +151,6 @@ textarea {
   background: rgba(255, 255, 255, 0.04);
   color: rgba(255, 255, 255, 0.55);
   font-size: 12px;
-  cursor: default;
 }
 
 #toolbar .toggle-btn.active {
@@ -171,7 +175,6 @@ textarea {
 
 #toolbar .toggle-btn:disabled {
   color: var(--color-text-muted);
-  cursor: default;
   opacity: 0.35;
 }
 
@@ -202,7 +205,9 @@ textarea {
 #data-panel {
   width: var(--data-panel-width, 240px);
   min-width: var(--data-panel-width, 240px);
-  transition: width 0.2s ease, min-width 0.2s ease;
+  transition:
+    width 0.2s ease,
+    min-width 0.2s ease;
 }
 
 #properties-panel {
@@ -210,7 +215,9 @@ textarea {
   min-width: var(--props-panel-width, 240px);
   border-right: none;
   border-left: 1px solid rgba(255, 255, 255, 0.08);
-  transition: width 0.2s ease, min-width 0.2s ease;
+  transition:
+    width 0.2s ease,
+    min-width 0.2s ease;
 }
 
 #data-panel.collapsed {
@@ -354,12 +361,49 @@ input[type="radio"] {
 }
 
 input[type="range"] {
+  appearance: none;
   accent-color: #8b5cf6;
+  -webkit-appearance: none;
+  height: 16px;
+  background: transparent;
 }
 
-input[type="range"]:hover,
-input[type="range"]:focus {
-  accent-color: #8b5cf6;
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(from var(--color-purple) r g b / 0.35);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-purple);
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(from var(--color-purple) r g b / 0.35);
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-purple);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-purple);
+  cursor: pointer;
 }
 
 input[type="color"] {
@@ -437,7 +481,9 @@ input[type="color"]:focus-visible {
   color: var(--color-text-muted);
   font-size: 18px;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 
 .panel-collapse-strip:hover,
@@ -667,11 +713,21 @@ input[type="color"]:focus-visible {
   padding-left: 4px;
 }
 
-.nuc-a { color: #2196F3; }
-.nuc-t { color: #FBC02D; }
-.nuc-g { color: #F44336; }
-.nuc-c { color: #4CAF50; }
-.nuc-gap { color: #9E9E9E; }
+.nuc-a {
+  color: #2196f3;
+}
+.nuc-t {
+  color: #fbc02d;
+}
+.nuc-g {
+  color: #f44336;
+}
+.nuc-c {
+  color: #4caf50;
+}
+.nuc-gap {
+  color: #9e9e9e;
+}
 
 #viewport {
   position: relative;
@@ -753,7 +809,9 @@ text {
   cursor: pointer;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 #zoom-controls button:hover,
@@ -788,18 +846,15 @@ text {
 }
 
 #progress-overlay {
-  position: absolute;
-  top: var(--toolbar-height);
-  right: var(--props-panel-width);
-  bottom: var(--status-bar-height);
-  left: var(--data-panel-width);
-  z-index: 100;
+  position: fixed;
+  inset: 0;
+  z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgb(from var(--color-chrome) r g b / 0.7);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .progress-dialog {
@@ -809,13 +864,12 @@ text {
   align-items: center;
   gap: 16px;
   padding: 32px 40px;
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  background: rgb(from var(--color-chrome) r g b / 0.92);
-  color: var(--color-text-primary);
+  background: rgba(20, 20, 20, 0.95);
+  color: #ffffff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   text-align: center;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
 }
 
 #progress-stage-label {
@@ -855,9 +909,9 @@ text {
 #progress-cancel {
   margin-top: 4px;
   padding: 6px 20px;
-  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--color-border);
+  background: rgb(from var(--color-text-primary) r g b / 0.05);
   color: var(--color-text-secondary);
   font-size: 12px;
   cursor: pointer;
@@ -865,8 +919,8 @@ text {
 
 #progress-cancel:hover,
 #progress-cancel:focus-visible {
-  border-color: var(--color-yellow);
-  color: var(--color-yellow);
+  border-color: var(--color-purple);
+  color: var(--color-purple);
   outline: none;
 }
 
@@ -976,9 +1030,9 @@ text {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgb(from var(--color-chrome) r g b / 0.7);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .modal-dialog {
@@ -986,13 +1040,11 @@ text {
   min-width: 300px;
   gap: 16px;
   padding: 24px;
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  background: rgb(from var(--color-panel) r g b / 0.92);
-  color: var(--color-text-primary);
-  box-shadow: 0 8px 32px rgb(from var(--color-chrome) r g b / 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(20, 20, 20, 0.95);
+  color: #ffffff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .modal-dialog h2,
@@ -1066,7 +1118,7 @@ text {
 #toolbar #restore-cancel,
 #toolbar #unsaved-cancel {
   border: 1px solid var(--color-border);
-  background: transparent;
+  background: rgb(from var(--color-text-primary) r g b / 0.05);
   color: var(--color-text-secondary);
 }
 
