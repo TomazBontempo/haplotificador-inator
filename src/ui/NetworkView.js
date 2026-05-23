@@ -335,7 +335,9 @@ function appShell() {
         </aside>
         <main id="viewport">
           <div id="svg-container">
-            <p>Open a .nex file and run an algorithm to see the network</p>
+            <div class="canvas-empty-state">
+              Drop your file here, or use File &gt; Open
+            </div>
           </div>
           <div id="zoom-controls">
             <button id="zoom-in" type="button">+</button>
@@ -412,6 +414,19 @@ function showMessage(message) {
     paragraph.textContent = message;
     container.appendChild(paragraph);
   }
+}
+
+function showEmptyCanvasMessage() {
+  const container = byId("svg-container");
+  if (!container) {
+    return;
+  }
+
+  container.replaceChildren();
+  const emptyState = document.createElement("div");
+  emptyState.className = "canvas-empty-state";
+  emptyState.textContent = "Drop your file here, or use File > Open";
+  container.appendChild(emptyState);
 }
 
 function clearProgressDotsInterval() {
@@ -1881,22 +1896,52 @@ async function handleSavedProjectFileSelected(file) {
   }
 }
 
-function handleOpenFileSelected(file) {
+function isSupportedProjectFile(file) {
+  const filename =
+    typeof file?.name === "string" ? file.name.toLowerCase() : "";
+  return filename.endsWith(".nex") || filename.endsWith(".hapnet");
+}
+
+async function handleOpenFileSelected(file) {
   if (!file) {
     return;
   }
 
   const filename = file.name.toLowerCase();
   if (filename.endsWith(".nex")) {
-    handleNexusFileSelected(file);
+    await handleNexusFileSelected(file);
     return;
   }
   if (filename.endsWith(".hapnet")) {
-    handleSavedProjectFileSelected(file);
+    await handleSavedProjectFileSelected(file);
     return;
   }
 
   showMessage("Unsupported file format. Please open a .nex or .hapnet file.");
+}
+
+async function openFileWithGuards(file) {
+  if (!file) {
+    return;
+  }
+
+  if (!isSupportedProjectFile(file)) {
+    await handleOpenFileSelected(file);
+    return;
+  }
+
+  try {
+    const check = await checkUnsavedChanges();
+    if (check === "cancel") {
+      return;
+    }
+  } catch (error) {
+    showMessage(`Failed to save current project: ${error.message}`);
+    syncStatusBar();
+    return;
+  }
+
+  await handleOpenFileSelected(file);
 }
 
 function sampledVertexCount(graph) {
@@ -2627,20 +2672,9 @@ async function exportCurrentNetwork() {
 function wireFileInputs() {
   const openInput = byId("open-file-input");
 
-  byId("open-file")?.addEventListener("click", async (event) => {
+  byId("open-file")?.addEventListener("click", (event) => {
     closeFileMenu();
     blurClickedControl(event);
-
-    try {
-      const check = await checkUnsavedChanges();
-      if (check === "cancel") {
-        return;
-      }
-    } catch (error) {
-      showMessage(`Failed to save current project: ${error.message}`);
-      syncStatusBar();
-      return;
-    }
 
     if (openInput) {
       openInput.value = "";
@@ -2648,8 +2682,8 @@ function wireFileInputs() {
     openInput?.click();
   });
 
-  openInput?.addEventListener("change", () => {
-    handleOpenFileSelected(openInput.files?.[0] ?? null);
+  openInput?.addEventListener("change", async () => {
+    await openFileWithGuards(openInput.files?.[0] ?? null);
   });
 }
 
@@ -2904,6 +2938,7 @@ async function maybeOfferSessionRestore() {
   try {
     const storage = await getStorageModule();
     if (!(await storage.hasAutoSave())) {
+      showEmptyCanvasMessage();
       return;
     }
 
@@ -2914,11 +2949,12 @@ async function maybeOfferSessionRestore() {
       }
     } else {
       await storage.clearAutoSave();
-      showMessage("Open a .nex file and run an algorithm to see the network");
+      showEmptyCanvasMessage();
       syncStatusBar();
     }
   } catch (error) {
     console.warn(error);
+    showEmptyCanvasMessage();
   }
 }
 
@@ -2966,6 +3002,69 @@ function endPan() {
   isMiddleButtonPanning = false;
   panChanged = false;
   byId("viewport")?.classList.toggle("panning", spacePanMode);
+}
+
+function isFileDragEvent(event) {
+  return Array.from(event.dataTransfer?.types ?? []).includes("Files");
+}
+
+function clearFileDropActive() {
+  byId("viewport")?.classList.remove("file-drop-active");
+}
+
+function wireViewportFileDrop() {
+  const viewport = byId("viewport");
+  if (!viewport) {
+    return;
+  }
+
+  let dragDepth = 0;
+
+  viewport.addEventListener("dragenter", (event) => {
+    if (!isFileDragEvent(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    dragDepth += 1;
+    viewport.classList.add("file-drop-active");
+  });
+
+  viewport.addEventListener("dragover", (event) => {
+    if (!isFileDragEvent(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+  });
+
+  viewport.addEventListener("dragleave", () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) {
+      clearFileDropActive();
+    }
+  });
+
+  viewport.addEventListener("drop", async (event) => {
+    if (!isFileDragEvent(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    dragDepth = 0;
+    clearFileDropActive();
+
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    if (files.length > 1) {
+      showMessage("Please drop one .nex or .hapnet file at a time.");
+      return;
+    }
+
+    await openFileWithGuards(files[0] ?? null);
+  });
 }
 
 function wireViewportInteractions() {
@@ -3196,6 +3295,7 @@ export function initNetworkView() {
   wireModals();
   wireZoomControls();
   wireResizeObserver();
+  wireViewportFileDrop();
   wireViewportInteractions();
   wireKeyboardShortcuts();
   byId("progress-cancel")?.addEventListener("click", (event) => {

@@ -739,11 +739,6 @@ input[type="color"]:focus-visible {
   background: var(--color-canvas);
 }
 
-#viewport.dragover,
-#viewport.drag-over {
-  border: 2px dashed var(--color-yellow);
-}
-
 #viewport.pan-ready {
   cursor: grab;
 }
@@ -772,6 +767,40 @@ input[type="color"]:focus-visible {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 14px;
+}
+
+.canvas-empty-state {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+#viewport.file-drop-active {
+  background: #ded9cc;
+}
+
+#viewport.file-drop-active #svg-container {
+  background: #ded9cc;
+}
+
+#viewport.file-drop-active::after {
+  position: absolute;
+  inset: 14px;
+  z-index: 5;
+  border: 2px dashed var(--color-yellow);
+  border-radius: 6px;
+  content: "";
+  pointer-events: none;
+}
+
+#viewport.file-drop-active .canvas-empty-state {
+  position: relative;
+  z-index: 6;
+  padding: 12px 18px;
+  border: 1px solid rgba(245, 166, 35, 0.65);
+  border-radius: 4px;
+  background: rgba(36, 36, 36, 0.9);
+  color: var(--color-yellow);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
 }
 
 #svg-container svg {
