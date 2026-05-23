@@ -125,7 +125,7 @@ describe("NetworkView", () => {
 
     expect(document.getElementById("status-filename").textContent).toBe("tapir.nex");
     expect(document.getElementById("status-algorithm").textContent).toBe("MJN");
-    expect(document.getElementById("status-haplotypes").textContent).toBe("2");
+    expect(document.getElementById("status-haplotypes").textContent).toBe("2 haplotypes");
     jest.useRealTimers();
   });
 

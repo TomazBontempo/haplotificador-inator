@@ -850,10 +850,10 @@ function syncStatusBar() {
   byId("status-filename").textContent = filename;
   byId("status-algorithm").textContent = state.graph ? state.algorithm : "—";
   byId("status-haplotypes").textContent = Number.isFinite(state.hapNet?.nseqs)
-    ? String(state.hapNet.nseqs)
+    ? `${state.hapNet.nseqs} haplotypes`
     : "—";
   byId("status-edges").textContent = Array.isArray(state.graph?.edges)
-    ? String(state.graph.edges.length)
+    ? `${state.graph.edges.length} edges`
     : "—";
   let saveStatusText = state.saveStatus ?? "—";
   if (state.hasUnsavedChanges) {
