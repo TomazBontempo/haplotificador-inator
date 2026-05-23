@@ -196,6 +196,20 @@ so the agent understands the intended behavior before implementing.
 - Firefox does not support the File System Access API — Save As is unavailable.
   Auto-save via IndexedDB still works in Firefox.
 
+  ## Comment requirements
+
+All new or modified code must follow the comment style established
+in src/algorithms/MJN.js:
+
+- File header: short, 3-4 lines maximum
+- Function comments: one or two lines, no @param/@returns type annotations
+- Inline comments: explain WHY not WHAT
+- No comments that restate the code in English
+- No comments on obvious single-line operations
+
+When adding or modifying code, always add appropriate comments
+before considering the task done.
+
 ## Milestones
 
 - [x] 01 - Project Setup
@@ -264,10 +278,10 @@ so the agent understands the intended behavior before implementing.
     - [x] Implement Save and Save As — keyboard shortcuts (Ctrl+S / Ctrl+Shift+S),
           toolbar icon, and File menu dropdown options.
 
-  - [ ] 12c - Visual Controls
-    - [ ] Implement controls for node manipulation, colors, fonts, and zoom.
-    - [ ] Implement color customization for edges, vertices, and background with color picker.
-    - [ ] Implement edge label / tick mark toggle.
-    - [ ] Add export size recommendation warning for print quality
+  - [x] 12c - Visual Controls
+    - [x] Implement controls for node manipulation, colors, fonts, and zoom.
+    - [x] Implement color customization for edges, vertices, and background with color picker.
+    - [x] Implement edge label / tick mark toggle.
+    - [x] Add export size recommendation warning for print quality
           (minimum 3000x3000 for publications).
-    - [ ] Implement undo/redo history for node manipulation and visual changes
+    - [x] Implement undo/redo history for node manipulation and visual changes

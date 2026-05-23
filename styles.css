@@ -166,12 +166,6 @@ textarea {
   color: var(--color-yellow);
 }
 
-#pan-mode-btn.active {
-  color: #f5a623;
-  border-color: #f5a623;
-  background: rgba(245, 166, 35, 0.1);
-}
-
 #toolbar .toggle-btn:hover:not(:disabled),
 #toolbar .toggle-btn:focus-visible:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.25);
@@ -873,6 +867,12 @@ text {
   border-color: var(--color-yellow);
   color: var(--color-yellow);
   outline: none;
+}
+
+#zoom-controls #pan-mode-btn.active {
+  border-color: var(--color-yellow);
+  background: rgb(from var(--color-chrome) r g b / 0.7);
+  color: var(--color-yellow);
 }
 
 #status-bar {

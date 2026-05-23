@@ -51,6 +51,8 @@ let isMiddleButtonPanning = false;
 let isDraggingNodes = false;
 let isRubberBanding = false;
 let lastPointer = null;
+// Separate flags for pointer-captured pan, two-finger touch pan,
+// and mouse fallback -- each path has different lifecycle and cleanup.
 let activePanPointerId = null;
 let touchPanActive = false;
 let touchPanChanged = false;
@@ -140,6 +142,8 @@ function createInitialState() {
     dataPanelCollapsed: false,
     propsPanelCollapsed: false,
     selectedElements: [],
+    // Pan mode lives in shared state so keyboard, toolbar, and
+    // viewport class stay synchronized through a single toggle path.
     panModeActive: false,
     maskedSites: 0,
     maskedSiteIndices: [],
@@ -289,7 +293,6 @@ function appShell() {
         <button id="undo-btn" type="button" title="Undo (Ctrl+Z)" disabled>↩</button>
         <button id="redo-btn" type="button" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
         <div id="toolbar-right">
-          <button id="pan-mode-btn" class="toolbar-right-btn" title="Pan mode (P)">✋</button>
           <button id="toggle-labels" class="toggle-btn active" title="Show/hide node labels">
             👁 Labels
           </button>
@@ -415,6 +418,7 @@ function appShell() {
           <div id="zoom-controls">
             <button id="zoom-in" type="button">+</button>
             <button id="zoom-out" type="button">-</button>
+            <button id="pan-mode-btn" type="button" title="Pan mode (P)">✋</button>
             <button id="zoom-fit" type="button">⊡</button>
           </div>
         </main>
@@ -1102,9 +1106,7 @@ function showTemporaryStatus(message, duration = 3000) {
 
 // ─── Visuals ──────────────────────────────────────────────────────────────
 
-/**
- * Restricts zoom to the supported canvas range.
- */
+// Avoid rounding so small touchpad deltas stay smooth.
 function clampZoom(value) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value)));
 }
@@ -1117,9 +1119,8 @@ function setZoom(value) {
   setZoomAtViewportPoint(value, point.x, point.y);
 }
 
-/**
- * Reads a client pointer position in viewport coordinates.
- */
+// Cursor coordinates relative to the container -- wheel zoom needs these to
+// anchor the zoom point correctly.
 function viewportPointFromClient(clientX, clientY) {
   const rect = byId("svg-container")?.getBoundingClientRect();
   if (!rect) {
@@ -1132,9 +1133,8 @@ function viewportPointFromClient(clientX, clientY) {
   };
 }
 
-/**
- * Returns the center of the visible SVG viewport.
- */
+// Fallback anchor keeps keyboard zoom usable before the SVG container has
+// been measured.
 function viewportCenterPoint() {
   const rect = byId("svg-container")?.getBoundingClientRect();
   return {
@@ -1872,18 +1872,16 @@ function syncToggleButton(button, active, disabled = false) {
   button.setAttribute("aria-pressed", active ? "true" : "false");
 }
 
-/**
- * Applies the persistent pan mode state to the viewport and toolbar button.
- */
+// Single sync point keeps toolbar button, viewport cursor class, and state
+// flag consistent.
 function syncPanModeState() {
   const active = state.panModeActive === true;
   byId("viewport")?.classList.toggle("pan-mode", active);
   syncToggleButton(byId("pan-mode-btn"), active);
 }
 
-/**
- * Toggles click-and-drag viewport panning without requiring Space.
- */
+// Exposes Space-drag pan behavior for touchpad users without requiring a
+// held key.
 function togglePanMode() {
   state.panModeActive = !state.panModeActive;
   syncPanModeState();
@@ -3052,6 +3050,7 @@ function handleLabelMousedown(event) {
   if (event.button !== 0) {
     return;
   }
+  // Pan mode lets the viewport pan handler win over label dragging.
   if (state.panModeActive) {
     return;
   }
@@ -3318,6 +3317,7 @@ function wireSvgInteractions(svg) {
       return;
     }
 
+    // Pan mode bypasses SVG editing so left-drag pans anywhere on canvas.
     if (spacePanMode || state.panModeActive) {
       return;
     }
@@ -3382,6 +3382,7 @@ function wireLegendInteractions(svg) {
 
   legend.addEventListener("mousedown", (event) => {
     if (event.button === 0) {
+      // Pan mode lets canvas panning win over legend dragging.
       if (state.panModeActive) {
         return;
       }
@@ -3930,9 +3931,8 @@ function endPan() {
   byId("viewport")?.classList.toggle("panning", spacePanMode);
 }
 
-/**
- * Moves the viewport by the screen delta since the previous pan event.
- */
+// Shared pan math used by Space, middle-button, pointer capture, and pan
+// mode -- all behave identically.
 function updatePanDrag(event) {
   if (!lastPointer) {
     return;
@@ -4053,9 +4053,8 @@ function wireViewportInteractions() {
         return;
       }
       event.preventDefault();
-      // Normalize delta across different devices and browsers.
-      // Mouse wheel produces large deltaY (~100), touchpad produces small (~3-5).
-      // Using a logarithmic scale keeps zoom feeling consistent on both.
+      // Normalize so mouse wheels and touchpad pinch zoom at comparable
+      // speeds despite very different deltaY scales.
       const delta = event.deltaY;
       const normalized = delta * (event.deltaMode === 1 ? 20 : 1);
       const zoomFactor = Math.pow(0.996, normalized);
@@ -4069,6 +4068,8 @@ function wireViewportInteractions() {
     { passive: false },
   );
 
+  // Some Windows browsers expose swipe intent as wheel delta before
+  // consuming it for history navigation -- intercept it here first.
   viewport.addEventListener(
     "wheel",
     (event) => {
@@ -4094,6 +4095,8 @@ function wireViewportInteractions() {
       event.preventDefault();
       beginPan(event, true);
     } else if (
+      // Mouse fallback covers browsers without PointerEvent; modern browsers
+      // use pointer capture instead.
       (spacePanMode || state.panModeActive) &&
       event.button === 0 &&
       typeof window.PointerEvent === "undefined"
@@ -4107,6 +4110,8 @@ function wireViewportInteractions() {
     if (!spacePanMode && !state.panModeActive) {
       return;
     }
+    // Touch has a separate two-finger handler -- pointer pan only handles
+    // mouse and pen-like input.
     if (event.pointerType === "touch") {
       return;
     }
@@ -4115,6 +4120,8 @@ function wireViewportInteractions() {
     }
 
     event.preventDefault();
+    // Pointer capture keeps pan updates flowing when the cursor leaves the
+    // viewport boundary.
     activePanPointerId = event.pointerId;
     beginPan(event);
     viewport.setPointerCapture?.(event.pointerId);
@@ -4148,6 +4155,8 @@ function wireViewportInteractions() {
   viewport.addEventListener(
     "touchstart",
     (event) => {
+      // Two-finger pan tracks the midpoint so hand movement translates
+      // directly to canvas movement.
       if (event.touches.length === 2) {
         touchPanActive = true;
         touchPanChanged = false;
@@ -4162,6 +4171,8 @@ function wireViewportInteractions() {
   viewport.addEventListener(
     "touchmove",
     (event) => {
+      // Call before touch-count check -- browser scroll and history navigation
+      // must be suppressed before JS filtering runs.
       event.preventDefault();
       if (!touchPanActive || event.touches.length !== 2) {
         return;
@@ -4187,6 +4198,8 @@ function wireViewportInteractions() {
 
   viewport.addEventListener("touchend", (event) => {
     if (event.touches.length < 2) {
+      // Only save visual change when touch pan actually moved -- tap-to-release
+      // should not dirty the undo history.
       if (touchPanActive && touchPanChanged) {
         markVisualChange();
       }
@@ -4206,6 +4219,8 @@ function wireViewportInteractions() {
       return;
     }
 
+    // Pointer-captured pans are handled by pointermove -- skip mousemove to
+    // avoid duplicate pan updates.
     if (isPanning && activePanPointerId !== null) {
       return;
     }
@@ -4328,6 +4343,8 @@ function wireKeyboardShortcuts() {
       return;
     }
 
+    // P shortcut mirrors the toolbar pan mode button for touchpad users who
+    // prefer keyboard activation.
     if (event.key === "p" || event.key === "P") {
       if (document.activeElement?.tagName === "INPUT") {
         return;
