@@ -2064,7 +2064,14 @@ function createHistorySnapshot(type) {
       x: vertex.x,
       y: vertex.y,
     })),
-    visualOptions: JSON.parse(JSON.stringify(state.visualOptions)),
+    visualOptions: (() => {
+      const opts = JSON.parse(JSON.stringify(state.visualOptions));
+      // Zoom and pan are navigation, so undo never jumps the camera.
+      delete opts.zoom;
+      delete opts.panX;
+      delete opts.panY;
+      return opts;
+    })(),
   };
 }
 
@@ -2133,7 +2140,14 @@ function restoreSnapshot(snapshot) {
     }
   }
 
+  const currentZoom = state.visualOptions.zoom;
+  const currentPanX = state.visualOptions.panX;
+  const currentPanY = state.visualOptions.panY;
   state.visualOptions = JSON.parse(JSON.stringify(snapshot.visualOptions));
+  // Camera state survives undo/redo because it is navigation, not edit history.
+  state.visualOptions.zoom = currentZoom;
+  state.visualOptions.panX = currentPanX;
+  state.visualOptions.panY = currentPanY;
 }
 
 /**
