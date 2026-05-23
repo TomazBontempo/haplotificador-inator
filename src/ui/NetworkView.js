@@ -51,6 +51,11 @@ let isMiddleButtonPanning = false;
 let isDraggingNodes = false;
 let isRubberBanding = false;
 let lastPointer = null;
+let activePanPointerId = null;
+let touchPanActive = false;
+let touchPanChanged = false;
+let lastTouchX = 0;
+let lastTouchY = 0;
 let rubberBandStart = null;
 let rubberBandRect = null;
 let svgContainerResizeObserver = null;
@@ -157,6 +162,16 @@ function resetState() {
   Object.assign(state, next);
   dataPanelWidth = DEFAULT_PANEL_WIDTH;
   propsPanelWidth = DEFAULT_PANEL_WIDTH;
+  spacePanMode = false;
+  isPanning = false;
+  isMiddleButtonPanning = false;
+  lastPointer = null;
+  activePanPointerId = null;
+  touchPanActive = false;
+  touchPanChanged = false;
+  lastTouchX = 0;
+  lastTouchY = 0;
+  panChanged = false;
   movedVertexIndices.clear();
   isLegendDragging = false;
   legendDragOffset = null;
@@ -1075,14 +1090,56 @@ function showTemporaryStatus(message, duration = 3000) {
  * Restricts zoom to the supported canvas range.
  */
 function clampZoom(value) {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(2))));
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value)));
 }
 
 /**
  * Applies a new zoom level and records it as a visual change.
  */
 function setZoom(value) {
-  state.visualOptions.zoom = clampZoom(value);
+  const point = viewportCenterPoint();
+  setZoomAtViewportPoint(value, point.x, point.y);
+}
+
+/**
+ * Reads a client pointer position in viewport coordinates.
+ */
+function viewportPointFromClient(clientX, clientY) {
+  const rect = byId("svg-container")?.getBoundingClientRect();
+  if (!rect) {
+    return viewportCenterPoint();
+  }
+
+  return {
+    x: clientX - rect.left,
+    y: clientY - rect.top,
+  };
+}
+
+/**
+ * Returns the center of the visible SVG viewport.
+ */
+function viewportCenterPoint() {
+  const rect = byId("svg-container")?.getBoundingClientRect();
+  return {
+    x: rect ? rect.width / 2 : state.visualOptions.width / 2,
+    y: rect ? rect.height / 2 : state.visualOptions.height / 2,
+  };
+}
+
+/**
+ * Applies a zoom level while keeping a viewport point visually fixed.
+ */
+function setZoomAtViewportPoint(value, cursorX, cursorY) {
+  const currentZoom = state.visualOptions.zoom;
+  const newZoom = clampZoom(value);
+  const zoomRatio = newZoom / currentZoom;
+
+  state.visualOptions.panX =
+    cursorX - zoomRatio * (cursorX - state.visualOptions.panX);
+  state.visualOptions.panY =
+    cursorY - zoomRatio * (cursorY - state.visualOptions.panY);
+  state.visualOptions.zoom = newZoom;
   applyViewportTransform();
   markVisualChange();
 }
@@ -3225,6 +3282,10 @@ function wireSvgInteractions(svg) {
       return;
     }
 
+    if (spacePanMode) {
+      return;
+    }
+
     if (labelElementFromEvent(event)) {
       handleLabelMousedown(event);
       return;
@@ -3827,6 +3888,41 @@ function endPan() {
 }
 
 /**
+ * Moves the viewport by the screen delta since the previous pan event.
+ */
+function updatePanDrag(event) {
+  if (!lastPointer) {
+    return;
+  }
+
+  const dx = event.clientX - lastPointer.x;
+  const dy = event.clientY - lastPointer.y;
+  lastPointer = { x: event.clientX, y: event.clientY };
+
+  const delta = screenDeltaToViewportDelta(dx, dy);
+  state.visualOptions.panX += delta.x;
+  state.visualOptions.panY += delta.y;
+  if (delta.x !== 0 || delta.y !== 0) {
+    panChanged = true;
+  }
+  applyViewportTransform();
+}
+
+/**
+ * Ends an active pan gesture and persists the visual change if needed.
+ */
+function finishPanGesture() {
+  lastPointer = null;
+  activePanPointerId = null;
+  if (isPanning || isMiddleButtonPanning) {
+    if (panChanged) {
+      markVisualChange();
+    }
+    endPan();
+  }
+}
+
+/**
  * Reports whether a drag event contains files.
  */
 function isFileDragEvent(event) {
@@ -3914,8 +4010,16 @@ function wireViewportInteractions() {
         return;
       }
       event.preventDefault();
-      setZoom(
-        state.visualOptions.zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP),
+      // Normalize delta across different devices and browsers.
+      // Mouse wheel produces large deltaY (~100), touchpad produces small (~3-5).
+      // Using a logarithmic scale keeps zoom feeling consistent on both.
+      const delta = event.deltaY;
+      const zoomFactor = Math.pow(0.999, delta);
+      const point = viewportPointFromClient(event.clientX, event.clientY);
+      setZoomAtViewportPoint(
+        state.visualOptions.zoom * zoomFactor,
+        point.x,
+        point.y,
       );
     },
     { passive: false },
@@ -3925,9 +4029,105 @@ function wireViewportInteractions() {
     if (event.button === 1) {
       event.preventDefault();
       beginPan(event, true);
-    } else if (spacePanMode && event.button === 0) {
+    } else if (
+      spacePanMode &&
+      event.button === 0 &&
+      typeof window.PointerEvent === "undefined"
+    ) {
       event.preventDefault();
       beginPan(event);
+    }
+  });
+
+  viewport.addEventListener("pointerdown", (event) => {
+    if (!spacePanMode) {
+      return;
+    }
+    if (event.pointerType === "touch") {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    activePanPointerId = event.pointerId;
+    beginPan(event);
+    viewport.setPointerCapture?.(event.pointerId);
+  });
+
+  viewport.addEventListener("pointermove", (event) => {
+    if (activePanPointerId !== event.pointerId) {
+      return;
+    }
+    if (!isPanning) {
+      return;
+    }
+
+    event.preventDefault();
+    updatePanDrag(event);
+  });
+
+  const handlePanPointerEnd = (event) => {
+    if (activePanPointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    viewport.releasePointerCapture?.(event.pointerId);
+    finishPanGesture();
+  };
+
+  viewport.addEventListener("pointerup", handlePanPointerEnd);
+  viewport.addEventListener("pointercancel", handlePanPointerEnd);
+
+  viewport.addEventListener(
+    "touchstart",
+    (event) => {
+      if (event.touches.length === 2) {
+        touchPanActive = true;
+        touchPanChanged = false;
+        lastTouchX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        lastTouchY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        event.preventDefault();
+      }
+    },
+    { passive: false },
+  );
+
+  viewport.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!touchPanActive || event.touches.length !== 2) {
+        return;
+      }
+
+      const currentX =
+        (event.touches[0].clientX + event.touches[1].clientX) / 2;
+      const currentY =
+        (event.touches[0].clientY + event.touches[1].clientY) / 2;
+      const deltaX = currentX - lastTouchX;
+      const deltaY = currentY - lastTouchY;
+      state.visualOptions.panX += deltaX;
+      state.visualOptions.panY += deltaY;
+      if (deltaX !== 0 || deltaY !== 0) {
+        touchPanChanged = true;
+      }
+      lastTouchX = currentX;
+      lastTouchY = currentY;
+      applyViewportTransform();
+      event.preventDefault();
+    },
+    { passive: false },
+  );
+
+  viewport.addEventListener("touchend", (event) => {
+    if (event.touches.length < 2) {
+      if (touchPanActive && touchPanChanged) {
+        markVisualChange();
+      }
+      touchPanActive = false;
+      touchPanChanged = false;
     }
   });
 
@@ -3942,12 +4142,13 @@ function wireViewportInteractions() {
       return;
     }
 
+    if (isPanning && activePanPointerId !== null) {
+      return;
+    }
+
     if (!lastPointer) {
       return;
     }
-    const dx = event.clientX - lastPointer.x;
-    const dy = event.clientY - lastPointer.y;
-    lastPointer = { x: event.clientX, y: event.clientY };
 
     if (pendingVertexGesture) {
       event.preventDefault();
@@ -3973,13 +4174,7 @@ function wireViewportInteractions() {
 
       moveDraggedVertices(event);
     } else if (isPanning) {
-      const delta = screenDeltaToViewportDelta(dx, dy);
-      state.visualOptions.panX += delta.x;
-      state.visualOptions.panY += delta.y;
-      if (delta.x !== 0 || delta.y !== 0) {
-        panChanged = true;
-      }
-      applyViewportTransform();
+      updatePanDrag(event);
     } else if (isRubberBanding) {
       event.preventDefault();
       updateRubberBand(event);
@@ -4022,13 +4217,10 @@ function wireViewportInteractions() {
       finishRubberBand();
     }
     isDraggingNodes = false;
-    lastPointer = null;
-    if (isPanning || isMiddleButtonPanning) {
-      if (panChanged) {
-        markVisualChange();
-      }
-      endPan();
+    if (isPanning && activePanPointerId !== null) {
+      return;
     }
+    finishPanGesture();
   });
 }
 
@@ -4057,11 +4249,10 @@ function startAutoSaveTimer() {
 function wireKeyboardShortcuts() {
   document.addEventListener("keydown", (event) => {
     if (event.code === "Space" && !event.repeat) {
-      if (
-        ["BUTTON", "INPUT", "SELECT"].includes(document.activeElement?.tagName)
-      ) {
+      if (event.target?.matches?.("input, textarea, button, select")) {
         return;
       }
+      event.preventDefault();
       spacePanMode = true;
       byId("viewport")?.classList.add("pan-ready");
       return;
