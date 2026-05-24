@@ -8,6 +8,10 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_EDGE_COLOR = "#666666";
 const DEFAULT_EDGE_WIDTH = 1.5;
 const DEFAULT_LABEL_COLOR = "#333333";
+// Fixed in natural graph units; viewBox export scaling handles
+// proportional sizing automatically at any export dimension.
+const TICK_LENGTH = 5;
+const TICK_SPACING = 6;
 
 /**
  * Creates SVG elements in the correct namespace for browser rendering.
@@ -62,22 +66,21 @@ export function renderEdgeItem(edge, options = {}) {
   group.appendChild(line);
 
   if (displayMode === "ticks" && length > 0) {
-    // Distribute ticks by edge length like PopART; fixed spacing
-    // looks wrong when edges vary greatly in length or export size changes.
-    const ux = dx / length;
-    const uy = dy / length;
-    const px = -uy;
-    const py = ux;
-    const spacing = length / (weight + 1);
-    const tickHalf = 5;
-    for (let index = 1; index <= weight; index += 1) {
-      const tickX = fromX + ux * spacing * index;
-      const tickY = fromY + uy * spacing * index;
+    // Ticks cluster at midpoint to avoid overlapping node circles
+    // at edge endpoints.
+    const tickCount = Math.max(0, Math.floor(weight));
+    const totalWidth = (tickCount - 1) * TICK_SPACING;
+    const startT = 0.5 - (totalWidth / 2) / length;
+    const stepT = TICK_SPACING / length;
+    for (let index = 0; index < tickCount; index += 1) {
+      const t = startT + index * stepT;
+      const tickX = fromX + t * dx;
+      const tickY = fromY + t * dy;
       const tick = createSvgElement("line");
-      tick.setAttribute("x1", String(tickX - px * tickHalf));
-      tick.setAttribute("y1", String(tickY - py * tickHalf));
-      tick.setAttribute("x2", String(tickX + px * tickHalf));
-      tick.setAttribute("y2", String(tickY + py * tickHalf));
+      tick.setAttribute("x1", String(tickX - perpX * TICK_LENGTH));
+      tick.setAttribute("y1", String(tickY - perpY * TICK_LENGTH));
+      tick.setAttribute("x2", String(tickX + perpX * TICK_LENGTH));
+      tick.setAttribute("y2", String(tickY + perpY * TICK_LENGTH));
       tick.setAttribute("stroke", edgeColor);
       tick.setAttribute("stroke-width", String(edgeWidth));
       // Let drag/selection gestures reach the underlying edge or vertex group.
