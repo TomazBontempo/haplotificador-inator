@@ -245,6 +245,10 @@ export function renderLegend(graph, visualOptions) {
   if (traitNames.length === 0) {
     return null;
   }
+  // Respect user's legend visibility preference in export.
+  if (visualOptions.showLegend === false) {
+    return null;
+  }
 
   const baseRadius = Number(visualOptions.baseRadius ?? DEFAULT_OPTIONS.baseRadius);
   const visualBaseRadius = Number.isFinite(baseRadius) && baseRadius > 0

@@ -160,6 +160,10 @@ function appendLabel(group, vertex, radius, fill, visualOptions) {
   if (!label) {
     return;
   }
+  // Respect user's label visibility preference in export.
+  if (visualOptions.showLabels === false) {
+    return;
+  }
 
   const fontSize = numericValue(visualOptions.fontSize, 12);
   const offset = visualOptions.labelOffsets?.[vertex.index] ?? {
