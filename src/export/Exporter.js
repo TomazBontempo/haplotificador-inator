@@ -71,40 +71,55 @@ function vertexPosition(vertex) {
 }
 
 /**
- * Computes the coordinate bounds of the graph's vertices.
+ * Computes graph bounds wide enough for nearby rendered annotations.
  */
-function graphBounds(vertices) {
+function graphBoundsWithPadding(graph, visualOptions = {}) {
+  const vertices = graph.vertices ?? [];
   if (vertices.length === 0) {
     return {
       minX: 0,
       minY: 0,
-      maxX: 0,
-      maxY: 0,
-      width: 0,
-      height: 0,
+      maxX: 1000,
+      maxY: 1000,
+      width: 1000,
+      height: 1000,
     };
   }
 
-  const first = vertexPosition(vertices[0]);
-  const bounds = {
-    minX: first.x,
-    minY: first.y,
-    maxX: first.x,
-    maxY: first.y,
-  };
+  const fontSize = numericValue(visualOptions.fontSize, 12);
+  const strokeWidth = numericValue(visualOptions.edges?.width, 1.5);
+  const baseRadius = numericValue(visualOptions.baseRadius, 10);
+  const labelPadding = fontSize * 4;
+  const tickPadding = 10;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
 
-  for (const vertex of vertices.slice(1)) {
+  for (const vertex of vertices) {
     const position = vertexPosition(vertex);
-    bounds.minX = Math.min(bounds.minX, position.x);
-    bounds.minY = Math.min(bounds.minY, position.y);
-    bounds.maxX = Math.max(bounds.maxX, position.x);
-    bounds.maxY = Math.max(bounds.maxY, position.y);
+    // Include visual element sizes in bounds; vertex centers alone
+    // would clip nodes, labels, and tick marks near the network edges.
+    const radius = numericValue(vertex.radius, baseRadius) + labelPadding;
+    minX = Math.min(minX, position.x - radius);
+    minY = Math.min(minY, position.y - radius);
+    maxX = Math.max(maxX, position.x + radius);
+    maxY = Math.max(maxY, position.y + radius);
   }
 
+  const margin = Math.max(strokeWidth, tickPadding) * 2;
+  minX -= margin;
+  minY -= margin;
+  maxX += margin;
+  maxY += margin;
+
   return {
-    ...bounds,
-    width: bounds.maxX - bounds.minX,
-    height: bounds.maxY - bounds.minY,
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
   };
 }
 
@@ -154,7 +169,7 @@ function scaledPosition(vertex, bounds, sizing, width, height) {
  * Builds a temporary graph projection sized for the export canvas.
  */
 function scaledGraph(graph, width, height) {
-  const bounds = graphBounds(graph.vertices);
+  const bounds = graphBoundsWithPadding(graph);
   const sizing = fitScale(bounds, width, height);
   const vertexMap = new Map();
   const vertices = graph.vertices.map((vertex) => {
@@ -183,6 +198,63 @@ function scaledGraph(graph, width, height) {
 }
 
 /**
+ * Expands export bounds to keep the generated legend inside the viewBox.
+ */
+function boundsIncludingLegend(bounds, svg) {
+  const legendEl = svg.querySelector("#network-legend");
+  if (!legendEl) {
+    return bounds;
+  }
+
+  const transform = legendEl.getAttribute("transform") ?? "";
+  const match = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+  if (!match) {
+    return bounds;
+  }
+
+  const legendX = Number.parseFloat(match[1]);
+  const legendY = Number.parseFloat(match[2]);
+  if (!Number.isFinite(legendX) || !Number.isFinite(legendY)) {
+    return bounds;
+  }
+
+  const minX = Math.min(bounds.minX, legendX - 10);
+  const minY = Math.min(bounds.minY, legendY - 10);
+  const maxX = Math.max(bounds.maxX, legendX + 200);
+  const maxY = Math.max(bounds.maxY, legendY + 300);
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+/**
+ * Reads export viewBox coordinates for background painting.
+ */
+function svgViewBoxBounds(svg) {
+  const values = (svg.getAttribute("viewBox") ?? "")
+    .trim()
+    .split(/\s+/)
+    .map((value) => Number.parseFloat(value));
+
+  if (values.length !== 4 || values.some((value) => !Number.isFinite(value))) {
+    return null;
+  }
+
+  return {
+    x: values[0],
+    y: values[1],
+    width: values[2],
+    height: values[3],
+  };
+}
+
+/**
  * Reads the configured background color used by non-transparent exports.
  */
 function backgroundColor(visualOptions) {
@@ -193,18 +265,32 @@ function backgroundColor(visualOptions) {
  * Inserts or updates an SVG background rectangle for opaque SVG exports.
  */
 function addSvgBackground(svg, fill) {
+  const viewBox = svgViewBoxBounds(svg);
   const existing = svg.firstElementChild?.classList?.contains("svg-background")
     ? svg.firstElementChild
     : null;
   if (existing) {
+    if (viewBox) {
+      existing.setAttribute("x", String(viewBox.x));
+      existing.setAttribute("y", String(viewBox.y));
+      existing.setAttribute("width", String(viewBox.width));
+      existing.setAttribute("height", String(viewBox.height));
+    }
     existing.setAttribute("fill", fill);
     return;
   }
 
   const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   rect.setAttribute("class", "svg-background");
-  rect.setAttribute("width", "100%");
-  rect.setAttribute("height", "100%");
+  if (viewBox) {
+    rect.setAttribute("x", String(viewBox.x));
+    rect.setAttribute("y", String(viewBox.y));
+    rect.setAttribute("width", String(viewBox.width));
+    rect.setAttribute("height", String(viewBox.height));
+  } else {
+    rect.setAttribute("width", "100%");
+    rect.setAttribute("height", "100%");
+  }
   rect.setAttribute("fill", fill);
   svg.insertBefore(rect, svg.firstChild);
 }
@@ -237,18 +323,31 @@ function svgDataUrl(svgText) {
  */
 function renderExportSvg(graph, visualOptions, exportOptions) {
   const normalizedExportOptions = normalizeExportOptions(exportOptions);
-  const normalizedVisualOptions = normalizeVisualOptions(visualOptions, normalizedExportOptions);
-  // scaledGraph creates a temporary projection so export sizing does not
-  // rewrite the graph coordinates used by the UI.
-  const graphForExport = scaledGraph(
-    graph,
-    normalizedExportOptions.width,
-    normalizedExportOptions.height,
-  );
-  const svg = renderNetwork(graphForExport, normalizedVisualOptions);
+  let normalizedVisualOptions = normalizeVisualOptions(visualOptions, normalizedExportOptions);
+  let bounds = graphBoundsWithPadding(graph, normalizedVisualOptions);
+  normalizedVisualOptions = {
+    ...normalizedVisualOptions,
+    width: bounds.width,
+    height: bounds.height,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+  };
+  const svg = renderNetwork(graph, normalizedVisualOptions);
+  bounds = boundsIncludingLegend(bounds, svg);
+  normalizedVisualOptions = {
+    ...normalizedVisualOptions,
+    width: bounds.width,
+    height: bounds.height,
+  };
 
+  // viewBox maps natural graph coordinates to export dimensions;
+  // SVG scales all content uniformly so nodes, fonts, and tick marks
+  // stay proportional at any export size without manual scaling.
+  svg.setAttribute("viewBox", `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`);
   svg.setAttribute("width", String(normalizedExportOptions.width));
   svg.setAttribute("height", String(normalizedExportOptions.height));
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   if (normalizedExportOptions.transparent) {
     removeSvgBackground(svg);
   }

@@ -170,12 +170,18 @@ describe("Exporter", () => {
     const svg = svgDocument.querySelector("svg");
     const positions = vertexTransforms(svgDocument);
 
+    // Verify SVG dimensions are set to export size.
     expect(svg.getAttribute("width")).toBe("3000");
     expect(svg.getAttribute("height")).toBe("3000");
-    expect(Math.min(...positions.map((position) => position.x))).toBeGreaterThanOrEqual(150);
-    expect(Math.max(...positions.map((position) => position.x))).toBeLessThanOrEqual(2850);
-    expect(Math.min(...positions.map((position) => position.y))).toBeGreaterThanOrEqual(150);
-    expect(Math.max(...positions.map((position) => position.y))).toBeLessThanOrEqual(2850);
+
+    // viewBox carries the fit math so rendered content scales as one scene.
+    const viewBox = svg.getAttribute("viewBox");
+    expect(viewBox).not.toBeNull();
+    const [, , vbW, vbH] = viewBox.split(" ").map(Number);
+    expect(vbW).toBeGreaterThan(0);
+    expect(vbH).toBeGreaterThan(0);
+    expect(svg.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
+    expect(Math.min(...positions.map((position) => position.x))).toBeGreaterThanOrEqual(0);
   });
 
   test("exportPNG calls canvas.toBlob and triggers download", async () => {
@@ -218,13 +224,22 @@ describe("Exporter", () => {
     );
 
     const svgDocument = await exportedSvgDocument(createdBlobs[0]);
+    const svg = svgDocument.querySelector("svg");
     const positions = vertexTransforms(svgDocument);
+    const viewportTransform = svgDocument.documentElement
+      .querySelector("g.viewport")
+      .getAttribute("transform");
 
-    expect(svgDocument.documentElement.querySelector("g.viewport").getAttribute("transform")).toBe(
-      "translate(0, 0) scale(1)",
-    );
+    expect(viewportTransform).toBe("translate(0, 0) scale(1)");
     expect(positions).toHaveLength(2);
-    expect(positions.map((position) => position.x).sort((a, b) => a - b)).toEqual([50, 950]);
-    expect(positions.map((position) => position.y).sort((a, b) => a - b)).toEqual([50, 950]);
+    const xCoords = positions.map((position) => position.x).sort((a, b) => a - b);
+    expect(xCoords[0]).toBe(0);
+    expect(xCoords[1]).toBe(100);
+
+    const viewBox = svg.getAttribute("viewBox");
+    expect(viewBox).not.toBeNull();
+    const [, , vbW, vbH] = viewBox.split(" ").map(Number);
+    expect(vbW).toBeGreaterThan(100);
+    expect(vbH).toBeGreaterThan(100);
   });
 });
