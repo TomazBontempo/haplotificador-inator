@@ -2641,26 +2641,10 @@ async function handleOpenFileSelected(file) {
 }
 
 /**
- * Applies unsaved-change guards before opening a replacement project file.
+ * Routes selected or dropped files after caller-specific guards have run.
  */
 async function openFileWithGuards(file) {
   if (!file) {
-    return;
-  }
-
-  if (!isSupportedProjectFile(file)) {
-    await handleOpenFileSelected(file);
-    return;
-  }
-
-  try {
-    const check = await checkUnsavedChanges();
-    if (check === "cancel") {
-      return;
-    }
-  } catch (error) {
-    showMessage(`Failed to save current project: ${error.message}`);
-    syncStatusBar();
     return;
   }
 
@@ -3560,9 +3544,21 @@ async function exportCurrentNetwork() {
 function wireFileInputs() {
   const openInput = byId("open-file-input");
 
-  byId("open-file")?.addEventListener("click", (event) => {
+  byId("open-file")?.addEventListener("click", async (event) => {
     closeFileMenu();
     blurClickedControl(event);
+
+    // File picker must not open if the user cancels.
+    try {
+      const check = await checkUnsavedChanges();
+      if (check === "cancel") {
+        return;
+      }
+    } catch (error) {
+      showMessage(`Failed to save current project: ${error.message}`);
+      syncStatusBar();
+      return;
+    }
 
     if (openInput) {
       openInput.value = "";
@@ -4078,6 +4074,18 @@ function wireViewportFileDrop() {
     const files = Array.from(event.dataTransfer?.files ?? []);
     if (files.length > 1) {
       showMessage("Please drop one .nex or .hapnet file at a time.");
+      return;
+    }
+
+    // Dropped files bypass the picker, so guard before processing.
+    try {
+      const check = await checkUnsavedChanges();
+      if (check === "cancel") {
+        return;
+      }
+    } catch (error) {
+      showMessage(`Failed to save current project: ${error.message}`);
+      syncStatusBar();
       return;
     }
 
