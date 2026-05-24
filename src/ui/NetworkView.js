@@ -328,8 +328,8 @@ function appShell() {
               <label><input type="radio" name="export-format" value="SVG"> SVG</label>
               <label><input type="radio" name="export-format" value="PDF"> PDF</label>
             </fieldset>
-            <label>Width <input id="export-width" type="number" min="1" value="2000"></label>
-            <label>Height <input id="export-height" type="number" min="1" value="2000"></label>
+            <label>Width <input id="export-width" type="number" min="1" value="2000"> px</label>
+            <label>Height <input id="export-height" type="number" min="1" value="2000"> px</label>
             <label><input id="export-transparent" type="checkbox"> Transparent background</label>
             <div class="modal-actions">
               <button id="export-confirm" type="button">Export</button>
