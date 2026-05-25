@@ -1906,9 +1906,11 @@ function applyVisualVisibilityState(svg = currentSvg()) {
   svg?.classList.toggle("labels-hidden", !showLabels);
   syncToggleButton(labelsButton, showLabels);
 
+  // Disable only when there are no traits, not when the legend is hidden.
+  const hasTraits = (state.hapNet?.traitNames?.length ?? 0) > 0;
   const legend = svg?.querySelector("#network-legend") ?? null;
   if (!legend) {
-    syncToggleButton(legendButton, showLegend, true);
+    syncToggleButton(legendButton, showLegend, !hasTraits);
     return;
   }
 
@@ -1935,15 +1937,20 @@ function toggleLabels(event) {
  */
 function toggleLegend(event) {
   const svg = currentSvg();
-  const legend = svg?.querySelector("#network-legend") ?? null;
-  if (!legend) {
+  // A hidden legend is absent from the SVG, but traits can still recreate it.
+  const hasTraits = (state.hapNet?.traitNames?.length ?? 0) > 0;
+  if (!hasTraits) {
     applyVisualVisibilityState(svg);
     blurClickedControl(event);
     return;
   }
 
   state.visualOptions.showLegend = !(state.visualOptions.showLegend !== false);
-  applyVisualVisibilityState(svg);
+  if (state.visualOptions.showLegend !== false) {
+    rerenderNetwork();
+  } else {
+    applyVisualVisibilityState(svg);
+  }
   blurClickedControl(event);
   markVisualChange();
 }
