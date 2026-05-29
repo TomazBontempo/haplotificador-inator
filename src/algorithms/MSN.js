@@ -126,7 +126,7 @@ class UnionFind {
 /**
  * Computes PopART-compatible Minimum Spanning Network output as a new Graph.
  */
-export function computeMSN(hapNet) {
+export function computeMSN(hapNet, epsilon = 0) {
   assertHapNetLike(hapNet);
 
   // The result is a fresh Graph; the HapNet input is never modified.
@@ -145,18 +145,38 @@ export function computeMSN(hapNet) {
   }
 
   const pairs = buildSortedPairs(hapNet);
-  const unionFind = new UnionFind(hapNet.nseqs);
+  const msnComponents = new UnionFind(hapNet.nseqs);
+  const thresholdComponents = new UnionFind(hapNet.nseqs);
+  let cursor = 0;
+  let thresholdCursor = 0;
+  let maxValue = Number.POSITIVE_INFINITY;
 
   // Equal-distance pairs are batched before merging components. This reproduces
   // PopART's MSN behavior, which can emit cycles where a standard MST would stop.
-  for (let cursor = 0; cursor < pairs.length && unionFind.componentCount > 1;) {
+  while (cursor < pairs.length) {
     const threshold = pairs[cursor].weight;
+    if (threshold > maxValue) {
+      break;
+    }
+
+    // Epsilon relaxa o critério de conexão — links dentro de
+    // threshold + epsilon são incluídos, igual ao MJN.
+    while (
+      thresholdCursor < pairs.length &&
+      pairs[thresholdCursor].weight < threshold - epsilon
+    ) {
+      thresholdComponents.union(pairs[thresholdCursor].from, pairs[thresholdCursor].to);
+      thresholdCursor += 1;
+    }
+
+    const thresholdPairs = [];
     const connectablePairs = [];
 
     // Select all pairs that connect different pre-threshold components.
     while (cursor < pairs.length && pairs[cursor].weight === threshold) {
       const pair = pairs[cursor];
-      if (!unionFind.connected(pair.from, pair.to)) {
+      thresholdPairs.push(pair);
+      if (!thresholdComponents.connected(pair.from, pair.to)) {
         connectablePairs.push(pair);
       }
       cursor += 1;
@@ -170,13 +190,16 @@ export function computeMSN(hapNet) {
     }
 
     // Merge components only after the whole threshold group has been emitted.
-    for (const pair of connectablePairs) {
-      unionFind.union(pair.from, pair.to);
+    for (const pair of thresholdPairs) {
+      msnComponents.union(pair.from, pair.to);
+      if (msnComponents.componentCount === 1 && maxValue === Number.POSITIVE_INFINITY) {
+        maxValue = threshold + epsilon;
+      }
     }
   }
 
   // A complete distance matrix should always make the graph connected.
-  if (unionFind.componentCount > 1) {
+  if (msnComponents.componentCount > 1) {
     throw algorithmError("Pair list ended before all haplotypes were connected.");
   }
 
