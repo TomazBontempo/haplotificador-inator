@@ -60,4 +60,31 @@ describe("NetworkRenderer", () => {
     expect(sampledVertices.every((vertexGroup) => vertexGroup.querySelector(".vertex-label")))
       .toBe(true);
   });
+
+  test("renders single-trait vertices as a plain circle without a radius stroke", () => {
+    const graph = new Graph();
+    const single = graph.addVertex("H33", { frequency: 3, traits: [0, 3] });
+    const mixed = graph.addVertex("H34", { frequency: 2, traits: [1, 1] });
+    single.x = 50;
+    single.y = 50;
+    mixed.x = 150;
+    mixed.y = 50;
+
+    const svg = renderNetwork(graph, {
+      width: 200,
+      height: 100,
+      traitColors: ["#ff0000", "#0000ff"],
+      baseRadius: 10,
+    });
+
+    const singleGroup = svg.querySelector(`g.vertex[data-index="${single.index}"]`);
+    const mixedGroup = svg.querySelector(`g.vertex[data-index="${mixed.index}"]`);
+
+    expect(singleGroup.querySelectorAll("path")).toHaveLength(0);
+    const fillCircle = singleGroup.querySelector("circle:not(.selection-ring)");
+    expect(fillCircle).not.toBeNull();
+    expect(fillCircle.getAttribute("fill")).toBe("#0000ff");
+
+    expect(mixedGroup.querySelectorAll("path")).toHaveLength(2);
+  });
 });

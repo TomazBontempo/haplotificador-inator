@@ -96,6 +96,13 @@ function appendSelectionRing(group, radius) {
  * Appends trait pie slices for sampled vertices with trait counts.
  */
 function appendPieSections(group, radius, traits, traitColors, defaultFill, stroke) {
+  if (traits.length === 1) {
+    // A single trait fills the whole vertex. Drawing it as a sector would
+    // stroke the radius from the center to the arc start, so use a plain circle.
+    appendSampledCircle(group, radius, traitColors[traits[0].index] ?? defaultFill, stroke);
+    return;
+  }
+
   const total = traits.reduce((sum, entry) => sum + entry.value, 0);
   let startAngle = -Math.PI / 2;
 
@@ -131,18 +138,6 @@ function sectorPath(radius, startAngle, endAngle) {
   const start = pointOnCircle(radius, startAngle);
   const end = pointOnCircle(radius, endAngle);
   const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
-
-  if (Math.abs(endAngle - startAngle) >= Math.PI * 2 - 1e-9) {
-    // SVG arcs cannot express a full circle in one segment, so split it into
-    // two half-arcs to preserve single-trait vertices.
-    return [
-      `M 0 0`,
-      `L ${start.x} ${start.y}`,
-      `A ${radius} ${radius} 0 1 1 ${-start.x} ${-start.y}`,
-      `A ${radius} ${radius} 0 1 1 ${start.x} ${start.y}`,
-      "Z",
-    ].join(" ");
-  }
 
   return [
     "M 0 0",
